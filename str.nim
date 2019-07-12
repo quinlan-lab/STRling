@@ -7,6 +7,23 @@ import tables
 import hts/bam
 import strformat
 import math
+import docopt
+
+let doc = """
+str
+
+Usage:
+  str [options] BAM
+
+Arguments:
+  BAM                Aligned reads in BAM or CRAM format
+
+Options:
+  -h --help          Show this help message.
+  --version          Show version.
+  -f --fasta FILE    Reference genome in fasta format. Required for CRAM files.
+  -p FLOAT           Read must have this proportion of STR to be considered [default: 0.8].
+"""
 
 type Seq[T] = object
   imax: int
@@ -260,6 +277,9 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
 when isMainModule:
   import math
 
+
+
+
   #testing()
   #if true:
   #  quit "asdf"
@@ -284,10 +304,14 @@ when isMainModule:
           cnt.argmax.decode(s)
           echo "k:", k, " ", count, " ", s, " break?:", count < (read.len.float * 0.15 / k.float).int, " imax:", cnt.imax, " cutoff:", int(read.len.float * 0.15 / k.float), " score:", k * count
 
+  # Parse args/options
+  let args = docopt(doc, version = "0.0.0")
+
   var t0 = cpuTime()
   var ibam:Bam
-  var bam_path = "/data/human/hg002.cram"
-  var fasta_path = "/data/human/g1k_v37_decoy.fa"
+  var bam_path = $args["BAM"]
+  var fasta_path = $args["--fasta"]
+  var proportion_repeat = parseFloat($args["-p"])
   if not open(ibam, bam_path, fai=fasta_path, threads=2):
     quit "couldn't open bam"
 
@@ -312,7 +336,7 @@ when isMainModule:
   stderr.write_line sizeof(tread())
 
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
-  var opts = Options(median_fragment_length: frag_median, proportion_repeat: 0.88, min_mapq: 20'u8)
+  var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat, min_mapq: 20'u8)
 
   var nreads = 0
   var counts = init[uint8]()
@@ -331,6 +355,5 @@ when isMainModule:
   cache.cache.sort(tread_cmp)
   for s in cache.cache:
     echo s.tostring(targets)
-  echo cache.cache.len, " total reads used"
-  echo cache.tbl.len, " left in table"
-
+  stderr.write_line cache.cache.len, " total reads used"
+  stderr.write_line cache.tbl.len, " left in table"
