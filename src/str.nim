@@ -335,8 +335,11 @@ when isMainModule:
     cache.add(aln, counts, opts)
 
   var targets = ibam.hdr.targets
-  for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=5):
-    echo c.tostring(targets)
+  var ci = 0
+  for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
+    for s in c.reads:
+      echo c.tostring(targets) & "\t" & $ci
+    ci += 1
 
   #for s in cache.cache:
   #  echo s.tostring(targets)
