@@ -5,25 +5,10 @@ import times
 import random
 import tables
 import hts/bam
+import ./strpkg/cluster
 import strformat
 import math
-import docopt
-
-let doc = """
-str
-
-Usage:
-  str [options] BAM
-
-Arguments:
-  BAM                Aligned reads in BAM or CRAM format
-
-Options:
-  -h --help          Show this help message.
-  --version          Show version.
-  -f --fasta FILE    Reference genome in fasta format. Required for CRAM files.
-  -p FLOAT           Read must have this proportion of STR to be considered [default: 0.8].
-"""
+import argparse
 
 type Seq[T] = object
   imax: int
@@ -61,12 +46,12 @@ proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int
     counted += 1
     if counted > n_reads: break
 
-proc median(fragment_sizes: array[4096, uint32]): int =
+proc median(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
   var n = sum(fragment_sizes)
   var count = 0'u32
   for i, cnt in fragment_sizes:
     count += cnt
-    if count >=  uint32(0.5 + n.float / 2'f):
+    if count >=  uint32(0.5 + n.float / (1.0 / pct)):
       return i
   return fragment_sizes.len
 
@@ -137,16 +122,6 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_
 
   result = read.get_repeat(counts, repeat_count, opts)
 
-# Data structure storing information about each read that looks like an STR
-type tread = object
-  tid: int32
-  position: uint32
-  repeat: array[6, char]
-  flag: Flag
-  split: int8
-  mapping_quality: uint8
-  repeat_count: uint8
-  read_length: uint8
 
 proc tostring(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -156,21 +131,10 @@ proc tostring(t:tread, targets: seq[Target]): string =
     rep.add(v)
   return &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
 
-# Sorts the reads by chromosome (tid) then repeat unit, then by position
-proc tread_cmp(a: tread, b:tread): int =
-  if a.tid != b.tid: return cmp(a.tid, b.tid)
-  for i in 0..<6:
-    if a.repeat[i] != b.repeat[i]:
-      return cmp(a.repeat[i], b.repeat[i])
-  return cmp(a.position, b.position)
-
 proc repeat_length(t:tread): uint8 {.inline.} =
   for v in t.repeat:
     if v == 0.char: return
     result.inc
-
-
-
 
 template p_repeat(t:tread): float =
   # proportion repeat
@@ -316,14 +280,22 @@ when isMainModule:
           echo "k:", k, " ", count, " ", s, " break?:", count < (read.len.float * 0.15 / k.float).int, " imax:", cnt.imax, " cutoff:", int(read.len.float * 0.15 / k.float), " score:", k * count
 
   # Parse args/options
-  let args = docopt(doc, version = "0.0.0")
+  var p = newParser("str"):
+    option("-f", "--fasta", help="path to fasta file")
+    option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
+    arg("bam", help="path to bam file")
+
+  var argv = commandLineParams()
+  if len(argv) == 0: argv = @["-h"]
+  var args = p.parse(argv)
+  if args.help:
+    quit 0
 
   var t0 = cpuTime()
   var ibam:Bam
-  var bam_path = $args["BAM"]
-  var fasta_path = $args["--fasta"]
-  var proportion_repeat = parseFloat($args["-p"])
-  if not open(ibam, bam_path, fai=fasta_path, threads=2):
+  var proportion_repeat = parseFloat(args.proportion_repeat)
+
+  if not open(ibam, args.bam, fai=args.fasta, threads=2):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -334,7 +306,7 @@ when isMainModule:
   stderr.write_line "median fragment length:", frag_median
 
   ibam.close()
-  if not open(ibam, bam_path, fai=fasta_path, threads=2, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
@@ -363,8 +335,13 @@ when isMainModule:
     cache.add(aln, counts, opts)
 
   var targets = ibam.hdr.targets
-  cache.cache.sort(tread_cmp)
-  for s in cache.cache:
-    echo s.tostring(targets)
-  stderr.write_line cache.cache.len, " total reads used"
+  var ci = 0
+  for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
+    for s in c.reads:
+      echo c.tostring(targets) & "\t" & $ci
+    ci += 1
+
+  #for s in cache.cache:
+  #  echo s.tostring(targets)
+  #stderr.write_line cache.cache.len, " total reads used"
   stderr.write_line cache.tbl.len, " left in table"
