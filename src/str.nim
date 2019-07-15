@@ -5,7 +5,7 @@ import times
 import random
 import tables
 import hts/bam
-import ./cluster
+import ./strpkg/cluster
 import strformat
 import math
 import docopt
@@ -344,7 +344,7 @@ when isMainModule:
 
   var targets = ibam.hdr.targets
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=5):
-    echo c
+    echo c.tostring(targets)
 
   #for s in cache.cache:
   #  echo s.tostring(targets)
