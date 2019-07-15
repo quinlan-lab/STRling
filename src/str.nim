@@ -283,6 +283,8 @@ when isMainModule:
   var p = newParser("str"):
     option("-f", "--fasta", help="path to fasta file")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
+    option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
+    flag("-v", "--verbose")
     arg("bam", help="path to bam file")
 
   var argv = commandLineParams()
@@ -294,6 +296,7 @@ when isMainModule:
   var t0 = cpuTime()
   var ibam:Bam
   var proportion_repeat = parseFloat(args.proportion_repeat)
+  var skip_reads = parseInt(args.skip)
 
   if not open(ibam, args.bam, fai=args.fasta, threads=2):
     quit "couldn't open bam"
@@ -301,9 +304,10 @@ when isMainModule:
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
-  var frag_dist = ibam.fragment_length_distribution()
+  var frag_dist = ibam.fragment_length_distribution(skip_reads=skip_reads)
   var frag_median = frag_dist.median
-  stderr.write_line "median fragment length:", frag_median
+  if args.verbose:
+    stderr.write_line "Calculated median fragment length:", frag_median
 
   ibam.close()
   if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
@@ -316,7 +320,6 @@ when isMainModule:
   for i, s in decodeds.mpairs:
     decodeds[i] = newString(i)
   shallow(decodeds)
-  stderr.write_line sizeof(tread())
 
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat, min_mapq: 20'u8)
@@ -330,18 +333,21 @@ when isMainModule:
 
     if nreads mod 10_000_000 == 0:
       var nrps = nreads.float64 / (cpuTime() - t0)
-      stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
+      if args.verbose:
+        stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
 
     cache.add(aln, counts, opts)
 
+  echo "chrom\tpos\tstr\tsoft_clip\tstr_count\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
     for s in c.reads:
-      echo c.tostring(targets) & "\t" & $ci
+      echo s.tostring(targets) & "\t" & $ci
     ci += 1
 
   #for s in cache.cache:
   #  echo s.tostring(targets)
   #stderr.write_line cache.cache.len, " total reads used"
-  stderr.write_line cache.tbl.len, " left in table"
+  if args.verbose:
+    stderr.write_line cache.tbl.len, " left in table"
