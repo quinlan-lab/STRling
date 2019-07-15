@@ -103,7 +103,7 @@ proc count(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
     count.inc(enc)
   return count.A[count.imax].int
 
-
+# This is the bottleneck for run time at the moment
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
   if read.count('N') > 20: return
 
@@ -137,7 +137,7 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_
 
   result = read.get_repeat(counts, repeat_count, opts)
 
-
+# Data structure storing information about each read that looks like an STR
 type tread = object
   tid: int32
   position: uint32
@@ -156,6 +156,7 @@ proc tostring(t:tread, targets: seq[Target]): string =
     rep.add(v)
   return &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
 
+# Sorts the reads by chromosome (tid) then repeat unit, then by position
 proc tread_cmp(a: tread, b:tread): int =
   if a.tid != b.tid: return cmp(a.tid, b.tid)
   for i in 0..<6:
@@ -223,7 +224,7 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
                   repeat: repeat,
                   repeat_count: repeat_count.uint8,
                   read_length: soft_seq.len.uint8,
-                  split: if cig_index == 0: -1 else: 1,
+                  split: if cig_index == 0: -1 else: 1, #-1 soft-clipped from left, 1 soft-clipped from right
                   mapping_quality: aln.mapping_quality
                   ))
 
@@ -232,6 +233,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
   cache.add_soft(aln, counts, opts)
 
+  # Check if you have both reads
   if aln.after_mate:
     var added = false
     var mate:tread
@@ -239,15 +241,19 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
 
     # get mates together and see what, if anything should be added to the final
     # cache.
+
     var self = aln.to_tread(counts, opts)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
     if mate.repeat_count > 0'u8:
+      # mate is STR, mate is mapped well
       if mate.mapping_quality >= opts.min_mapq or mate.flag.proper_pair:
         added = true
-        mate.position += uint32(mate.read_length.float / 2'f + 0.5)
+        mate.position += uint32(mate.read_length.float / 2'f + 0.5) # Record position as middle of mate
         cache.cache.add(mate)
+      # mate is STR, mate is mapped poorly, self is mapped well
       elif self.mapping_quality >= opts.min_mapq and not mate.flag.proper_pair:
         # self is right of mate, so the position subtracts th fragment length
+        # Note fragment size is the external distance
         #   mate                  self
         #   =======>             <===========
         #   000000000000000000000000000000000 fragment length
@@ -256,11 +262,14 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         added = true
         cache.cache.add(mate)
 
+
     if self.repeat_count > 0'u8:
+      # self is STR, self is mapped well
       if self.mapping_quality >= opts.min_mapq or self.flag.proper_pair:
         added = true
         self.position += uint32(self.read_length.float / 2'f + 0.5)
         cache.cache.add(self)
+      # self is STR, self is mapped poorly, mate is mapped well
       elif mate.mapping_quality >= opts.min_mapq and not self.flag.proper_pair:
         # self is right of mate, so the position subtracts the fragment length
         #   mate                  self
