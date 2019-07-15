@@ -17,7 +17,9 @@ suite "cluster suite":
     for cl in cluster(reads, 250, min_supporting_reads=3):
       check cl.reads.len == 4
 
-      check cl.tostring(@["chr0", "chr1"]) == "chr1	1	200	4	AAAAAT"
+
+
+      check cl.tostring(@[Target(name:"chr0"), Target(name:"chr1")]) == "chr1	1	200	4	AAAAAT"
       j += 1
 
     check j == 1

@@ -8,23 +8,7 @@ import hts/bam
 import ./strpkg/cluster
 import strformat
 import math
-import docopt
-
-let doc = """
-str
-
-Usage:
-  str [options] BAM
-
-Arguments:
-  BAM                Aligned reads in BAM or CRAM format
-
-Options:
-  -h --help          Show this help message.
-  --version          Show version.
-  -f --fasta FILE    Reference genome in fasta format. Required for CRAM files.
-  -p FLOAT           Read must have this proportion of STR to be considered [default: 0.8].
-"""
+import argparse
 
 type Seq[T] = object
   imax: int
@@ -296,14 +280,22 @@ when isMainModule:
           echo "k:", k, " ", count, " ", s, " break?:", count < (read.len.float * 0.15 / k.float).int, " imax:", cnt.imax, " cutoff:", int(read.len.float * 0.15 / k.float), " score:", k * count
 
   # Parse args/options
-  let args = docopt(doc, version = "0.0.0")
+  var p = newParser("str"):
+    option("-f", "--fasta", help="path to fasta file")
+    option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
+    arg("bam", help="path to bam file")
+
+  var argv = commandLineParams()
+  if len(argv) == 0: argv = @["-h"]
+  var args = p.parse(argv)
+  if args.help:
+    quit 0
 
   var t0 = cpuTime()
   var ibam:Bam
-  var bam_path = $args["BAM"]
-  var fasta_path = $args["--fasta"]
-  var proportion_repeat = parseFloat($args["-p"])
-  if not open(ibam, bam_path, fai=fasta_path, threads=2):
+  var proportion_repeat = parseFloat(args.proportion_repeat)
+
+  if not open(ibam, args.bam, fai=args.fasta, threads=2):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -314,7 +306,7 @@ when isMainModule:
   stderr.write_line "median fragment length:", frag_median
 
   ibam.close()
-  if not open(ibam, bam_path, fai=fasta_path, threads=2, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)

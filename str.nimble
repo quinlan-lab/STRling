@@ -8,7 +8,7 @@ license       = "MIT"
 
 # Dependencies
 
-requires "nim >= 0.18.0", "kmer", "hts", "itertools", "docopt"
+requires "nim >= 0.18.0", "kmer", "hts", "itertools", "argparse"
 bin = @["str"]
 
 srcDir = "src"

@@ -41,12 +41,12 @@ proc trim(cl:var Cluster, max_dist:uint32) =
   while len(cl.reads) > 0 and cl.reads[0].position < lo:
     cl.reads = cl.reads[1..cl.reads.high]
 
-proc tostring*(c:Cluster, tids: seq[string]): string =
+proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string
   for v in c.reads[0].repeat:
     if v == 0.char: continue
     rep.add(v)
-  return &"{tids[c.reads[0].tid]}\t{c.reads[0].position}\t{c.reads[c.reads.high].position}\t{c.reads.len}\t{rep}"
+  return &"{targets[c.reads[0].tid].name}\t{c.reads[0].position}\t{c.reads[c.reads.high].position}\t{c.reads.len}\t{rep}"
 
 iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   tandems.sort(tread_cmp)
