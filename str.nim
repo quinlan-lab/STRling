@@ -217,7 +217,9 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
 
     var repeat = soft_seq.get_repeat(counts, repeat_count, opts)
     if repeat_count == 0: continue
-    var position = if cig_index == 0: (aln.start + aln.cigar[0].len).uint32 else: (aln.stop - aln.cigar[aln.cigar.len - 1].len).uint32
+    # If read is soft-clipped on the left take the read position as the start of read
+    # If soft-clipped on the right take the read position to the the end of the alignment
+    var position = if cig_index == 0: (aln.start).uint32 else: (aln.stop).uint32
     cache.cache.add(tread(tid:aln.tid.int32,
                   position: position,
                   flag: aln.flag,
