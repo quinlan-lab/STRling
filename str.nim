@@ -5,6 +5,7 @@ import times
 import random
 import tables
 import hts/bam
+import ./cluster
 import strformat
 import math
 import docopt
@@ -61,12 +62,12 @@ proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int
     counted += 1
     if counted > n_reads: break
 
-proc median(fragment_sizes: array[4096, uint32]): int =
+proc median(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
   var n = sum(fragment_sizes)
   var count = 0'u32
   for i, cnt in fragment_sizes:
     count += cnt
-    if count >=  uint32(0.5 + n.float / 2'f):
+    if count >=  uint32(0.5 + n.float / (1.0 / pct)):
       return i
   return fragment_sizes.len
 
@@ -137,16 +138,6 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_
 
   result = read.get_repeat(counts, repeat_count, opts)
 
-# Data structure storing information about each read that looks like an STR
-type tread = object
-  tid: int32
-  position: uint32
-  repeat: array[6, char]
-  flag: Flag
-  split: int8
-  mapping_quality: uint8
-  repeat_count: uint8
-  read_length: uint8
 
 proc tostring(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -156,21 +147,10 @@ proc tostring(t:tread, targets: seq[Target]): string =
     rep.add(v)
   return &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
 
-# Sorts the reads by chromosome (tid) then repeat unit, then by position
-proc tread_cmp(a: tread, b:tread): int =
-  if a.tid != b.tid: return cmp(a.tid, b.tid)
-  for i in 0..<6:
-    if a.repeat[i] != b.repeat[i]:
-      return cmp(a.repeat[i], b.repeat[i])
-  return cmp(a.position, b.position)
-
 proc repeat_length(t:tread): uint8 {.inline.} =
   for v in t.repeat:
     if v == 0.char: return
     result.inc
-
-
-
 
 template p_repeat(t:tread): float =
   # proportion repeat
@@ -363,8 +343,10 @@ when isMainModule:
     cache.add(aln, counts, opts)
 
   var targets = ibam.hdr.targets
-  cache.cache.sort(tread_cmp)
-  for s in cache.cache:
-    echo s.tostring(targets)
-  stderr.write_line cache.cache.len, " total reads used"
+  for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=5):
+    echo c
+
+  #for s in cache.cache:
+  #  echo s.tostring(targets)
+  #stderr.write_line cache.cache.len, " total reads used"
   stderr.write_line cache.tbl.len, " left in table"
