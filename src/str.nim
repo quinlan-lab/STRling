@@ -285,6 +285,9 @@ when isMainModule:
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     arg("bam", help="path to bam file")
 
+  when not defined(danger):
+    stderr.write_line "warning: not compiled in fastest mode. will be slower"
+
   var argv = commandLineParams()
   if len(argv) == 0: argv = @["-h"]
   var args = p.parse(argv)
@@ -338,7 +341,7 @@ when isMainModule:
   var ci = 0
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
     for s in c.reads:
-      echo c.tostring(targets) & "\t" & $ci
+      echo s.tostring(targets) & "\t" & $ci
     ci += 1
 
   #for s in cache.cache:
