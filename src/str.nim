@@ -277,14 +277,14 @@ when isMainModule:
       "AGACAGATAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGACAGAC",
       ]:
         var read = read
-        echo "read:", read
+        stderr.write_line "read:", read
         #shuffle(read)
         for k in 2..6:
           cnt.clear
           var s = newString(k)
           var count = read.count(k, cnt)
           cnt.argmax.decode(s)
-          echo "k:", k, " ", count, " ", s, " break?:", count < (read.len.float * 0.15 / k.float).int, " imax:", cnt.imax, " cutoff:", int(read.len.float * 0.15 / k.float), " score:", k * count
+          stderr.write_line "k:", k, " ", count, " ", s, " break?:", count < (read.len.float * 0.15 / k.float).int, " imax:", cnt.imax, " cutoff:", int(read.len.float * 0.15 / k.float), " score:", k * count
 
   # Parse args/options
   var p = newParser("str"):
@@ -345,7 +345,7 @@ when isMainModule:
 
     cache.add(aln, counts, opts)
 
-  echo "chrom\tpos\tstr\tsoft_clip\tstr_count\tcluster_id" # print header
+  echo "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
