@@ -254,7 +254,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         cache.cache.add(self)
 
   else:
-    doAssert not cache.tbl.hasKeyOrPut(aln.qname, aln.to_tread(counts, opts))
+    doAssert not cache.tbl.hasKeyOrPut(aln.qname, aln.to_tread(counts, opts)), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
 
 when isMainModule:
   import math
