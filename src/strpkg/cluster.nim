@@ -14,6 +14,8 @@ type tread* = object
   mapping_quality*: uint8
   repeat_count*: uint8
   read_length*: uint8
+  when defined(debug):
+    qname*: string
 
 type Cluster* = object
   reads*: seq[tread]
