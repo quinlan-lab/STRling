@@ -6,6 +6,7 @@ import random
 import tables
 import hts/bam
 import ./strpkg/cluster
+export tread
 import strformat
 import math
 import argparse
@@ -129,7 +130,9 @@ proc tostring(t:tread, targets: seq[Target]): string =
   for v in t.repeat:
     if v == 0.char: continue
     rep.add(v)
-  return &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
+  result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
+  when defined(debug):
+    result &= "\t" & t.qname
 
 proc repeat_length(t:tread): uint8 {.inline.} =
   for v in t.repeat:
@@ -156,6 +159,8 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
                  read_length: read_length.uint8,
                  split: 0,
                  mapping_quality: aln.mapping_quality)
+  when defined(debug):
+    result.qname = aln.qname
 
 type Cache = object
   tbl: TableRef[string, tread]
@@ -193,6 +198,8 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
                   split: if cig_index == 0: -1 else: 1, #-1 soft-clipped from left, 1 soft-clipped from right
                   mapping_quality: aln.mapping_quality
                   ))
+    when defined(debug):
+      cache.cache[cache.cache.high].qname = aln.qname
 
 
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
