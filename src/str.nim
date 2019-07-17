@@ -6,6 +6,7 @@ import random
 import tables
 import hts/bam
 import ./strpkg/cluster
+import ./strpkg/utils
 export tread
 import strformat
 import math
@@ -120,9 +121,7 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_
   var read = ""
   aln.sequence(read)
   read_length = len(read)
-
   result = read.get_repeat(counts, repeat_count, opts)
-
 
 proc tostring(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -201,6 +200,31 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
     when defined(debug):
       cache.cache[cache.cache.high].qname = aln.qname
 
+proc should_reverse(f:Flag): bool {.inline.} =
+  ## this is only  called after we've ensured hi-quality of mate and lo-quality
+  ## of self.
+  return not f.mate_reverse
+
+proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
+  # find the minimal reverse complement of this repeat.
+  # this turns the repeat in array to a string, doubles it so that ACT becomes
+  # (the complement of) ACTACT and finds the minimal 3-mer of ACT, CTA, TAC
+  # this could be optimized but probably won't be called often
+  var s: string
+  for c in repeat:
+    if c == 0.char: break
+    s.add(c)
+  s = s.reverse_complement
+  let l = s.len
+  s.add(s)
+  var mv = uint64(0) - 1'u64
+  for m in s.slide_by(l):
+    if m < mv:
+      mv = m
+  var ms = newString(l)
+  mv.decode(ms)
+  for i in 0..<l:
+    repeat[i] = ms[i]
 
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
@@ -232,6 +256,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         #   000000000000000000000000000000000 fragment length
         mate.position = self.position - opts.median_fragment_length.uint32 + self.read_length + uint32(mate.read_length.float / 2'f + 0.5)
         mate.tid = self.tid
+        if mate.flag.should_reverse:
+          mate.repeat.min_rev_complement
         added = true
         cache.cache.add(mate)
 
@@ -250,6 +276,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         #   000000000000000000000000000000000 fragment length
         self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.read_length.float / 2'f + 0.5)
         self.tid = mate.tid
+        if self.flag.should_reverse:
+          self.repeat.min_rev_complement
         added = true
         cache.cache.add(self)
 
