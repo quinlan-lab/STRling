@@ -1,8 +1,15 @@
 import algorithm
 import math
 import strformat
+import tables
 import itertools
 import hts/bam
+
+type Soft* {.size:1, pure.} = enum
+  left
+  right
+  both
+  none
 
 # Data structure storing information about each read that looks like an STR
 type tread* = object
@@ -10,7 +17,7 @@ type tread* = object
   position*: uint32
   repeat*: array[6, char]
   flag*: Flag
-  split*: int8
+  split*: Soft
   mapping_quality*: uint8
   repeat_count*: uint8
   align_length*: uint8
@@ -38,6 +45,53 @@ proc tread_cmp(a: tread, b:tread): int =
       return cmp(a.repeat[i], b.repeat[i])
   return cmp(a.position, b.position)
 
+type Bounds = object
+  tid: int32
+  left: uint32
+  right: uint32
+  center_mass: uint32
+  n_left: uint16
+  n_right: uint16
+  n_total: uint16
+  repeat: string
+
+
+proc bounds*(cl:Cluster): Bounds =
+  var lefts = initCountTable[uint32](8)
+  var rights = initCountTable[uint32](8)
+
+  var posns = newSeqOfCap[uint32](cl.reads.len)
+  for c in cl.reads[0].repeat:
+    if c == 0.char: break
+    result.repeat.add(c)
+  result.tid = cl.reads[0].tid
+
+  for r in cl.reads:
+    result.n_total.inc
+    if r.split == Soft.right:
+      # soft-clip of left indicates right end of variant
+      rights.inc(r.position)
+      result.n_right.inc
+    elif r.split == Soft.left:
+      lefts.inc(r.position)
+      result.n_left.inc
+    else:
+      posns.add(r.position)
+  var med_pos = posns[int(posns.len / 2)]
+  if lefts.len > 0 and rights.len > 0:
+    var ll = lefts.largest
+    var rr = rights.largest
+    if ll.val < 4:
+      stderr.write_line "TODO: figure out what to do here"
+    if rr.val < 4:
+      stderr.write_line "TODO: figure out what to do here"
+
+    result.left = ll.key
+    result.right = rr.key
+    result.center_mass = med_pos
+  else:
+      stderr.write_line "TODO: figure out what to do here"
+
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
@@ -45,6 +99,9 @@ proc trim(cl:var Cluster, max_dist:uint32) =
   var lo = max(0, cl.posmed(mediani).int - max_dist.int).uint32
   while len(cl.reads) > 0 and cl.reads[0].position < lo:
     cl.reads = cl.reads[1..cl.reads.high]
+
+proc tostring*(b:Bounds, targets: seq[Target]): string =
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string

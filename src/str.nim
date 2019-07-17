@@ -175,7 +175,7 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
                  flag: aln.flag,
                  repeat_count: repeat_count.uint8,
                  align_length: align_length.uint8,
-                 split: 0,
+                 split: Soft.none,
                  mapping_quality: aln.mapping_quality)
   when defined(debug):
     result.qname = aln.qname
@@ -213,7 +213,7 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
                   repeat: repeat,
                   repeat_count: repeat_count.uint8,
                   align_length: soft_seq.len.uint8,
-                  split: if cig_index == 0: -1 else: 1, #-1 soft-clipped from left, 1 soft-clipped from right
+                  split: if cig_index == 0: Soft.left else: Soft.right,
                   mapping_quality: aln.mapping_quality
                   ))
     when defined(debug):
@@ -353,6 +353,7 @@ when isMainModule:
     option("-f", "--fasta", help="path to fasta file")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
+    option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
 
@@ -407,16 +408,25 @@ when isMainModule:
 
     cache.add(aln, counts, opts)
 
-  echo "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
+  var reads_fh:File
+  var bounds_fh:File
+  if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
+    quit "couldn't open output file"
+  if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
+    quit "couldn't open output file"
+
+  reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
+    bounds_fh.write_line c.bounds.tostring(targets)
     for s in c.reads:
-      echo s.tostring(targets) & "\t" & $ci
+      reads_fh.write_line s.tostring(targets) & "\t" & $ci
     ci += 1
 
-  #for s in cache.cache:
-  #  echo s.tostring(targets)
-  #stderr.write_line cache.cache.len, " total reads used"
+  reads_fh.close
+  bounds_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
+    stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
+    stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
