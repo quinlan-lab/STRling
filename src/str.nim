@@ -129,11 +129,11 @@ proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int
       # cant possibly see a repeat.
       break
 
-proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_length: var int, opts:Options): array[6, char] =
+proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
   # returns blank array if nothing passes.
   var read = ""
   aln.sequence(read)
-  read_length = len(read)
+  align_length = len(read)
   result = read.get_repeat(counts, repeat_count, opts)
 
 proc tostring(t:tread, targets: seq[Target]): string =
@@ -153,7 +153,7 @@ proc repeat_length(t:tread): uint8 {.inline.} =
 
 template p_repeat(t:tread): float =
   # proportion repeat
-  float(t.repeat_count * t.repeat_length) / t.read_length.float
+  float(t.repeat_count * t.repeat_length) / t.align_length.float
 
 
 template after_mate(aln:Record): bool {.dirty.} =
@@ -161,14 +161,20 @@ template after_mate(aln:Record): bool {.dirty.} =
 
 proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline.} =
   var repeat_count: int
-  var read_length: int
-  var rep = aln.get_repeat(counts, repeat_count, read_length, opts)
+  var align_length: int
+  var rep = aln.get_repeat(counts, repeat_count, align_length, opts)
+  if aln.cigar.len > 0:
+    if aln.cigar[0].op == CigarOp.soft_clip:
+      align_length -= aln.cigar[0].len
+    if aln.cigar[aln.cigar.len-1].op == CigarOp.soft_clip:
+      align_length -= aln.cigar[aln.cigar.len-1].len
+
   result = tread(tid:aln.tid.int32,
                  position: aln.start.uint32,
                  repeat: rep,
                  flag: aln.flag,
                  repeat_count: repeat_count.uint8,
-                 read_length: read_length.uint8,
+                 align_length: align_length.uint8,
                  split: 0,
                  mapping_quality: aln.mapping_quality)
   when defined(debug):
@@ -206,7 +212,7 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
                   flag: aln.flag,
                   repeat: repeat,
                   repeat_count: repeat_count.uint8,
-                  read_length: soft_seq.len.uint8,
+                  align_length: soft_seq.len.uint8,
                   split: if cig_index == 0: -1 else: 1, #-1 soft-clipped from left, 1 soft-clipped from right
                   mapping_quality: aln.mapping_quality
                   ))
@@ -260,7 +266,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
       # mate is STR, mate is mapped well
       if mate.mapping_quality >= opts.min_mapq or mate.flag.proper_pair:
         added = true
-        mate.position += uint32(mate.read_length.float / 2'f + 0.5) # Record position as middle of mate
+        mate.position += uint32(mate.align_length.float / 2'f + 0.5) # Record position as middle of mate
         cache.cache.add(mate)
       # mate is STR, mate is mapped poorly, self is mapped well
       elif self.mapping_quality >= opts.min_mapq and not mate.flag.proper_pair:
@@ -270,12 +276,12 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
           #   mate                  self
           #   =======>             <===========
           #   000000000000000000000000000000000 fragment length
-          mate.position = self.position - opts.median_fragment_length.uint32 + self.read_length + uint32(mate.read_length.float / 2'f + 0.5)
+          mate.position = self.position - opts.median_fragment_length.uint32 + self.align_length + uint32(mate.align_length.float / 2'f + 0.5)
         else:
           #   self                 mate
           #   =======>             <===========
           #   000000000000000000000000000000000 fragment length
-          mate.position = self.position + opts.median_fragment_length.uint32 - uint32(mate.read_length.float / 2'f + 0.5)
+          mate.position = self.position + opts.median_fragment_length.uint32 - uint32(mate.align_length.float / 2'f + 0.5)
 
         mate.tid = self.tid
         if mate.flag.should_reverse:
@@ -287,7 +293,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
       # self is STR, self is mapped well
       if self.mapping_quality >= opts.min_mapq or self.flag.proper_pair:
         added = true
-        self.position += uint32(self.read_length.float / 2'f + 0.5)
+        self.position += uint32(self.align_length.float / 2'f + 0.5)
         cache.cache.add(self)
       # self is STR, self is mapped poorly, mate is mapped well
       elif mate.mapping_quality >= opts.min_mapq and not self.flag.proper_pair:
@@ -296,13 +302,13 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
           #   self                 mate
           #   =======>             <===========
           #   000000000000000000000000000000000 fragment length
-          self.position = mate.position + mate.read_length - opts.median_fragment_length.uint32 + uint32(mate.read_length.float / 2'f + 0.5)
+          self.position = mate.position + mate.align_length - opts.median_fragment_length.uint32 + uint32(mate.align_length.float / 2'f + 0.5)
 
         else:
           #   mate                  self
           #   =======>             <===========
           #   000000000000000000000000000000000 fragment length
-          self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.read_length.float / 2'f + 0.5)
+          self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.align_length.float / 2'f + 0.5)
         self.tid = mate.tid
         if self.flag.should_reverse:
           self.repeat.min_rev_complement

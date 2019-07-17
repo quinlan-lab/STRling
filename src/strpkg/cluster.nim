@@ -13,7 +13,7 @@ type tread* = object
   split*: int8
   mapping_quality*: uint8
   repeat_count*: uint8
-  read_length*: uint8
+  align_length*: uint8
   when defined(debug):
     qname*: string
 
