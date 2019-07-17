@@ -266,16 +266,22 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
       elif self.mapping_quality >= opts.min_mapq and not mate.flag.proper_pair:
         # self is right of mate, so the position subtracts th fragment length
         # Note fragment size is the external distance
-        #   mate                  self
-        #   =======>             <===========
-        #   000000000000000000000000000000000 fragment length
-        mate.position = self.position - opts.median_fragment_length.uint32 + self.read_length + uint32(mate.read_length.float / 2'f + 0.5)
+        if self.flag.reverse:
+          #   mate                  self
+          #   =======>             <===========
+          #   000000000000000000000000000000000 fragment length
+          mate.position = self.position - opts.median_fragment_length.uint32 + self.read_length + uint32(mate.read_length.float / 2'f + 0.5)
+        else:
+          #   self                 mate
+          #   =======>             <===========
+          #   000000000000000000000000000000000 fragment length
+          mate.position = self.position + opts.median_fragment_length.uint32 - uint32(mate.read_length.float / 2'f + 0.5)
+
         mate.tid = self.tid
         if mate.flag.should_reverse:
           mate.repeat.min_rev_complement
         added = true
         cache.cache.add(mate)
-
 
     if self.repeat_count > 0'u8:
       # self is STR, self is mapped well
@@ -286,10 +292,17 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
       # self is STR, self is mapped poorly, mate is mapped well
       elif mate.mapping_quality >= opts.min_mapq and not self.flag.proper_pair:
         # self is right of mate, so the position subtracts the fragment length
-        #   mate                  self
-        #   =======>             <===========
-        #   000000000000000000000000000000000 fragment length
-        self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.read_length.float / 2'f + 0.5)
+        if mate.flag.reverse:
+          #   self                 mate
+          #   =======>             <===========
+          #   000000000000000000000000000000000 fragment length
+          self.position = mate.position + mate.read_length - opts.median_fragment_length.uint32 + uint32(mate.read_length.float / 2'f + 0.5)
+
+        else:
+          #   mate                  self
+          #   =======>             <===========
+          #   000000000000000000000000000000000 fragment length
+          self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.read_length.float / 2'f + 0.5)
         self.tid = mate.tid
         if self.flag.should_reverse:
           self.repeat.min_rev_complement
