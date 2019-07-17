@@ -38,15 +38,28 @@ proc init[T](): Seqs[T] =
 proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
   var i = -1
   var counted:int = 0
+  var skipped = newSeqOfCap[Record](skip_reads)
   for aln in bam:
     i += 1
-    if i < skip_reads: continue
+    if i < skip_reads:
+      skipped.add(aln.copy())
+      continue
+    else:
+      skipped.setLen(0)
     if not aln.flag.proper_pair: continue
     if aln.isize < 0: continue
     if aln.isize > result.len: continue
     result[aln.isize].inc
     counted += 1
     if counted > n_reads: break
+
+  if result.sum == 0:
+    # mostly for debugging and testing on small bams.
+    stderr.write_line "using first reads in fragment_length_distribution calculation as there were not enough"
+    for aln in skipped:
+      if not aln.flag.proper_pair: continue
+      if aln.isize < 0 or aln.isize > result.len: continue
+      result[aln.isize].inc
 
 proc median(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
   var n = sum(fragment_sizes)
@@ -203,7 +216,9 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
 proc should_reverse(f:Flag): bool {.inline.} =
   ## this is only  called after we've ensured hi-quality of mate and lo-quality
   ## of self.
-  return not f.mate_reverse
+  result = not f.mate_reverse
+  if f.reverse:
+    result = not result
 
 proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
   # find the minimal reverse complement of this repeat.
