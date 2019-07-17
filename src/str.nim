@@ -6,6 +6,7 @@ import random
 import tables
 import hts/bam
 import ./strpkg/cluster
+import ./strpkg/utils
 export tread
 import strformat
 import math
@@ -37,15 +38,28 @@ proc init[T](): Seqs[T] =
 proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
   var i = -1
   var counted:int = 0
+  var skipped = newSeqOfCap[Record](skip_reads)
   for aln in bam:
     i += 1
-    if i < skip_reads: continue
+    if i < skip_reads:
+      skipped.add(aln.copy())
+      continue
+    else:
+      skipped.setLen(0)
     if not aln.flag.proper_pair: continue
     if aln.isize < 0: continue
     if aln.isize > result.len: continue
     result[aln.isize].inc
     counted += 1
     if counted > n_reads: break
+
+  if result.sum == 0:
+    # mostly for debugging and testing on small bams.
+    stderr.write_line "using first reads in fragment_length_distribution calculation as there were not enough"
+    for aln in skipped:
+      if not aln.flag.proper_pair: continue
+      if aln.isize < 0 or aln.isize > result.len: continue
+      result[aln.isize].inc
 
 proc median(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
   var n = sum(fragment_sizes)
@@ -120,9 +134,7 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, read_
   var read = ""
   aln.sequence(read)
   read_length = len(read)
-
   result = read.get_repeat(counts, repeat_count, opts)
-
 
 proc tostring(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -201,6 +213,33 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
     when defined(debug):
       cache.cache[cache.cache.high].qname = aln.qname
 
+proc should_reverse(f:Flag): bool {.inline.} =
+  ## this is only  called after we've ensured hi-quality of mate and lo-quality
+  ## of self.
+  result = not f.mate_reverse
+  if f.reverse:
+    result = not result
+
+proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
+  # find the minimal reverse complement of this repeat.
+  # this turns the repeat in array to a string, doubles it so that ACT becomes
+  # (the complement of) ACTACT and finds the minimal 3-mer of ACT, CTA, TAC
+  # this could be optimized but probably won't be called often
+  var s: string
+  for c in repeat:
+    if c == 0.char: break
+    s.add(c)
+  s = s.reverse_complement
+  let l = s.len
+  s.add(s)
+  var mv = uint64(0) - 1'u64
+  for m in s.slide_by(l):
+    if m < mv:
+      mv = m
+  var ms = newString(l)
+  mv.decode(ms)
+  for i in 0..<l:
+    repeat[i] = ms[i]
 
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
@@ -232,6 +271,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         #   000000000000000000000000000000000 fragment length
         mate.position = self.position - opts.median_fragment_length.uint32 + self.read_length + uint32(mate.read_length.float / 2'f + 0.5)
         mate.tid = self.tid
+        if mate.flag.should_reverse:
+          mate.repeat.min_rev_complement
         added = true
         cache.cache.add(mate)
 
@@ -250,6 +291,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         #   000000000000000000000000000000000 fragment length
         self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.read_length.float / 2'f + 0.5)
         self.tid = mate.tid
+        if self.flag.should_reverse:
+          self.repeat.min_rev_complement
         added = true
         cache.cache.add(self)
 
