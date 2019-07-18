@@ -44,3 +44,52 @@ suite "cluster suite":
     check b.left == 223
     check b.right == 253
 
+  test "test bounds: no soft-clipped reads so use median":
+    var reads = @[
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 1, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 2, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 5, split: Soft.none),
+      ]
+
+    var cl = Cluster(reads:reads)
+    var b = cl.bounds
+    check b.left == 2
+    check b.right == 2
+
+  test "test bounds: no right soft-clipped reads so use median":
+    var reads = @[
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 1, split: Soft.left),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 2, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 3, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 5, split: Soft.none),
+      ]
+
+    var cl = Cluster(reads:reads)
+    var b = cl.bounds
+    check b.left == 1
+    check b.right == 3
+
+  test "test bounds: no left soft-clipped reads so use median":
+    var reads = @[
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 2, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 2, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 3, split: Soft.right),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 5, split: Soft.none),
+      ]
+
+    var cl = Cluster(reads:reads)
+    var b = cl.bounds
+    check b.left == 2
+    check b.right == 3
+
+# This test is failing. Need to think about how to fix
+#  test "test bounds: no left soft-clipped reads so use median":
+#    var reads = @[
+#      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 3, split: Soft.right),
+#      ]
+#
+#    var cl = Cluster(reads:reads)
+#    var b = cl.bounds
+#    check b.left == 3
+#    check b.right == 3
+
