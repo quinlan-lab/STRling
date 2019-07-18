@@ -78,22 +78,18 @@ proc bounds*(cl:Cluster): Bounds =
       result.n_left.inc
     else:
       posns.add(r.position)
-  var med_pos = posns[int(posns.len / 2)]
-  result.center_mass = med_pos
+  if posns.len > 0:
+    result.center_mass = posns[int(posns.len / 2)]
   if lefts.len > 0:
-    var ll = lefts.largest # position supported by most reads
-    if ll.val < 4:
-      stderr.write_line "TODO: less than 4 reads support this value"
+    var ll = lefts.largest
     result.left = ll.key
   else:
-    result.left = med_pos
+    result.left = result.center_mass
   if rights.len > 0:
     var rr = rights.largest
-    if rr.val < 4:
-      stderr.write_line "TODO: less than 4 reads support this value"
     result.right = rr.key
   else:
-    result.right = med_pos
+    result.right = result.center_mass
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return

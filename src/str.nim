@@ -101,6 +101,7 @@ proc count(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
   count.clear
   for enc in read.slide_by(k):
     count.inc(enc)
+  if count.imax == -1: return 0
   return count.A[count.imax].int
 
 # This is the bottleneck for run time at the moment
@@ -184,8 +185,9 @@ type Cache = object
   tbl: TableRef[string, tread]
   cache: seq[tread]
 
-proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
-
+proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options, read_repeat:array[6, char]) =
+  # if read_repeat is not empty, we are more permissive on the length of the
+  # soft-clip as long as it has the same repeat unit.
 
   if aln.mapping_quality < opts.min_mapq: return
   if aln.cigar.len == 0 or (aln.cigar[0].op != CigarOp.soft_clip  and aln.cigar[aln.cigar.len - 1].op != CigarOp.soft_clip): return
@@ -195,7 +197,9 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
   for cig_index in [0, aln.cigar.len - 1]:
     var c = aln.cigar[cig_index]
     if c.op != CigarOp.soft_clip: continue
-    if c.len < 20: continue
+
+    if read_repeat[0] == 0.char and c.len < 20: continue
+
     aln.sequence(soft_seq)
     if cig_index == 0:
       soft_seq = soft_seq[0..<c.len]
@@ -204,6 +208,7 @@ proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options
 
     var repeat = soft_seq.get_repeat(counts, repeat_count, opts)
     if repeat_count == 0: continue
+
     # If read is soft-clipped on the left take the read position as the start of read
     # If soft-clipped on the right take the read position to the the end of the alignment
     var position = if cig_index == 0: (aln.start).uint32 else: (aln.stop).uint32
@@ -249,7 +254,6 @@ proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
 
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
-  cache.add_soft(aln, counts, opts)
 
   # Check if you have both reads
   if aln.after_mate:
@@ -261,7 +265,10 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     # cache.
 
     var self = aln.to_tread(counts, opts)
+    cache.add_soft(aln, counts, opts, self.repeat)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
+
+
     if mate.repeat_count > 0'u8:
       # mate is STR, mate is mapped well
       if mate.mapping_quality >= opts.min_mapq or mate.flag.proper_pair:
@@ -316,7 +323,9 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
         cache.cache.add(self)
 
   else:
-    doAssert not cache.tbl.hasKeyOrPut(aln.qname, aln.to_tread(counts, opts)), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+    var tr = aln.to_tread(counts, opts)
+    cache.add_soft(aln, counts, opts, tr.repeat)
+    doAssert not cache.tbl.hasKeyOrPut(aln.qname, tr), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
 
 when isMainModule:
   import math
