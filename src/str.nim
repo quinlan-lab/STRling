@@ -252,12 +252,43 @@ proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
   for i in 0..<l:
     repeat[i] = ms[i]
 
+proc adjust_by(A:var tread, B:tread, opts:Options): bool =
+  if A.repeat_count == 0'u8: return false
+  # potentially adjust A position by B
+
+  result = true
+
+  # when B has hi mapping quality, we adjust A if:
+  # A is very repetitive and B is not very repetitive
+  # A is mapped poorly, B is mapped well and it's not a proper pair
+  # TODO: use opts.$param for 0.9 and 0.2
+  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.9 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
+    # B is right of A, so the position subtracts th fragment length
+    # Note fragment size is the external distance
+    if B.flag.reverse:
+      #   A                  B
+      #   =======>             <===========
+      #   000000000000000000000000000000000 fragment length
+      A.position = B.position - opts.median_fragment_length.uint32 + B.align_length + uint32(A.align_length.float / 2'f + 0.5)
+    else:
+      #   B                 A
+      #   =======>             <===========
+      #   000000000000000000000000000000000 fragment length
+      A.position = B.position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
+
+    A.tid = B.tid
+    if A.flag.should_reverse:
+      A.repeat.min_rev_complement
+
+  # A is STR, A is mapped well
+  elif A.mapping_quality >= opts.min_mapq or A.flag.proper_pair:
+    A.position += uint32(A.align_length.float / 2'f + 0.5) # Record position as middle of A
+
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
 
   # Check if you have both reads
   if aln.after_mate:
-    var added = false
     var mate:tread
     if not cache.tbl.take(aln.qname, mate): return
 
@@ -268,73 +299,24 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     cache.add_soft(aln, counts, opts, self.repeat)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
 
-    var all_str_thresh = 0.9 #XXX Put this somewhere sensible
+    var all_str_thresh = 0.9 #XXX Put this somewhere sensible (add it to Options)
 
     # If both reads in pair are STR, set position to unknown
     if self.p_repeat > all_str_thresh and mate.p_repeat > all_str_thresh:
+      # NOTE: we don't know if we need to reverse complement these reads
+      # so we will have to equate forward and reverse repeat units later.
       self.position = uint32(0)
       self.tid = -1
       mate.position = uint32(0)
       mate.tid = -1
+      cache.cache.add(self)
+      cache.cache.add(mate)
+      return
 
-  
-
-    if mate.repeat_count > 0'u8:
-      # mate is STR, mate is mapped well
-      # XXX fix this
-      #if mate.p_repeat > 0.9 and self.p_repeat < 0.2 and self.mapping_quality > opts.min_mapq:
-      #  discard 
-
-      if mate.mapping_quality >= opts.min_mapq or mate.flag.proper_pair:
-        added = true
-        mate.position += uint32(mate.align_length.float / 2'f + 0.5) # Record position as middle of mate
-        cache.cache.add(mate)
-      # mate is STR, mate is mapped poorly, self is mapped well
-      elif self.mapping_quality >= opts.min_mapq and not mate.flag.proper_pair:
-        # self is right of mate, so the position subtracts th fragment length
-        # Note fragment size is the external distance
-        if self.flag.reverse:
-          #   mate                  self
-          #   =======>             <===========
-          #   000000000000000000000000000000000 fragment length
-          mate.position = self.position - opts.median_fragment_length.uint32 + self.align_length + uint32(mate.align_length.float / 2'f + 0.5)
-        else:
-          #   self                 mate
-          #   =======>             <===========
-          #   000000000000000000000000000000000 fragment length
-          mate.position = self.position + opts.median_fragment_length.uint32 - uint32(mate.align_length.float / 2'f + 0.5)
-
-        mate.tid = self.tid
-        if mate.flag.should_reverse:
-          mate.repeat.min_rev_complement
-        added = true
-        cache.cache.add(mate)
-
-    if self.repeat_count > 0'u8:
-      # self is STR, self is mapped well
-      if self.mapping_quality >= opts.min_mapq or self.flag.proper_pair:
-        added = true
-        self.position += uint32(self.align_length.float / 2'f + 0.5)
-        cache.cache.add(self)
-      # self is STR, self is mapped poorly, mate is mapped well
-      elif mate.mapping_quality >= opts.min_mapq and not self.flag.proper_pair:
-        # self is right of mate, so the position subtracts the fragment length
-        if mate.flag.reverse:
-          #   self                 mate
-          #   =======>             <===========
-          #   000000000000000000000000000000000 fragment length
-          self.position = mate.position + mate.align_length - opts.median_fragment_length.uint32 + uint32(mate.align_length.float / 2'f + 0.5)
-
-        else:
-          #   mate                  self
-          #   =======>             <===========
-          #   000000000000000000000000000000000 fragment length
-          self.position = mate.position + opts.median_fragment_length.uint32 - uint32(self.align_length.float / 2'f + 0.5)
-        self.tid = mate.tid
-        if self.flag.should_reverse:
-          self.repeat.min_rev_complement
-        added = true
-        cache.cache.add(self)
+    if mate.adjust_by(self, opts):
+      cache.cache.add(mate)
+    if self.adjust_by(mate, opts):
+      cache.cache.add(self)
 
   else:
     var tr = aln.to_tread(counts, opts)
@@ -442,6 +424,7 @@ when isMainModule:
   var targets = ibam.hdr.targets
   var ci = 0
   for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
+    if c.reads[0].tid == -1: continue
     bounds_fh.write_line c.bounds.tostring(targets)
     for s in c.reads:
       reads_fh.write_line s.tostring(targets) & "\t" & $ci
