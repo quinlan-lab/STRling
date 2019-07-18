@@ -55,8 +55,9 @@ type Bounds = object
   n_total: uint16
   repeat: string
 
-
+# Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
+
   var lefts = initCountTable[uint32](8)
   var rights = initCountTable[uint32](8)
 
@@ -78,20 +79,21 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       posns.add(r.position)
   var med_pos = posns[int(posns.len / 2)]
-  if lefts.len > 0 and rights.len > 0:
-    var ll = lefts.largest
-    var rr = rights.largest
+  result.center_mass = med_pos
+  if lefts.len > 0:
+    var ll = lefts.largest # position supported by most reads
     if ll.val < 4:
-      stderr.write_line "TODO: figure out what to do here"
-    if rr.val < 4:
-      stderr.write_line "TODO: figure out what to do here"
-
+      stderr.write_line "TODO: less than 4 reads support this value"
     result.left = ll.key
-    result.right = rr.key
-    result.center_mass = med_pos
   else:
-      stderr.write_line "TODO: figure out what to do here"
-
+    result.left = med_pos
+  if rights.len > 0:
+    var rr = rights.largest
+    if rr.val < 4:
+      stderr.write_line "TODO: less than 4 reads support this value"
+    result.right = rr.key
+  else:
+    result.right = med_pos
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
