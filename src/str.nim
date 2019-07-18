@@ -268,9 +268,23 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     cache.add_soft(aln, counts, opts, self.repeat)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
 
+    var all_str_thresh = 0.9 #XXX Put this somewhere sensible
+
+    # If both reads in pair are STR, set position to unknown
+    if self.p_repeat > all_str_thresh and mate.p_repeat > all_str_thresh:
+      self.position = uint32(0)
+      self.tid = -1
+      mate.position = uint32(0)
+      mate.tid = -1
+
+  
 
     if mate.repeat_count > 0'u8:
       # mate is STR, mate is mapped well
+      # XXX fix this
+      #if mate.p_repeat > 0.9 and self.p_repeat < 0.2 and self.mapping_quality > opts.min_mapq:
+      #  discard 
+
       if mate.mapping_quality >= opts.min_mapq or mate.flag.proper_pair:
         added = true
         mate.position += uint32(mate.align_length.float / 2'f + 0.5) # Record position as middle of mate
