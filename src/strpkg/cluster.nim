@@ -66,6 +66,7 @@ proc bounds*(cl:Cluster): Bounds =
     if c == 0.char: break
     result.repeat.add(c)
   result.tid = cl.reads[0].tid
+  doAssert cl.reads.len <= uint16.high.int, ("got too many reads for cluster with first read:" & $cl.reads[0])
 
   for r in cl.reads:
     result.n_total.inc
@@ -114,6 +115,8 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
   for group in groupby(tandems, bytidrep):
     # reps are on same chromosome and have same repeat unit
     var reps: seq[tread] = group.v
+    # NOTE: skipping unplaced for now.
+    if reps[0].tid < 0: continue
     var i = 0
     var c:Cluster
     while i < reps.len:
