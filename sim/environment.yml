@@ -1,0 +1,9 @@
+name: sim
+channels:
+- bioconda
+dependencies:
+- python=3*
+- BioPython
+- pysam
+- pandas
+#- htslib
