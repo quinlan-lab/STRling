@@ -413,6 +413,12 @@ when isMainModule:
 
     cache.add(aln, counts, opts)
 
+  # get unmapped reads
+  for aln in ibam.query("*"):
+    if aln.flag.secondary or aln.flag.supplementary: continue
+    nreads.inc
+    cache.add(aln, counts, opts)
+
   var reads_fh:File
   var bounds_fh:File
   if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
