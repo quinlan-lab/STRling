@@ -8,7 +8,9 @@ import sys
 from argparse import (ArgumentParser, FileType)
 from collections import OrderedDict
 from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import generic_dna
+from Bio import SeqIO
 import pysam 
 import random
 import pandas as pd
@@ -208,9 +210,9 @@ def mutate_str(ref_sequence, repeatunit, delta, random=False):
     if delta == 0:
         return(ref_sequence)
     if delta > 0: # Insertion
-        # select a position at random, sampling without replacement
         i_max = len(ref_sequence)-repeatunitlen
         if random:
+            # select a position at random, sampling without replacement
             i_range = random.sample(range(i_max), i_max)
         else:
             i_range = range(i_max)
@@ -228,7 +230,7 @@ def mutate_str(ref_sequence, repeatunit, delta, random=False):
             # Insert repeat units at end of sequence
             new_sequence = ref_sequence + last_bases * delta
             return(new_sequence)
-        # Check to make sure a solution was found
+        #XXX TODO If no solution was found, insert to the left, or random?
         raise ValueError("The repeat unit {0} was not found in {1}".format(repeatunit, ref_sequence))
     if delta < 0: # Deletion
         deletion_size = repeatunitlen * -delta
@@ -306,6 +308,20 @@ def left_trim_indel(ref, alt, pos):
                 return ref[i:], alt[i:], new_pos
     return ref[i:], alt[i:], new_pos
 
+def replace_variant(ref, variant, start, stop=None):
+    """Take a string, ref. Insert a string variant that replaces the bases
+    in ref from start to stop, inclusive.
+    start and stop are 0-based Pythonic coordinates
+    if stop is None, the variant will simply be inserted before the start base
+    """
+    if stop == None:
+        stop = start
+    assert stop >= start
+    assert start > 0 and stop > 0
+    assert start <= len(ref)
+    assert stop <= len(ref)
+    return ref[:start] + variant + ref[stop:]
+
 def get_vcf_writer(vcf_outfile, samples=['SAMPLE'], source='generate_str_alleles.py', ref=''):
     """Write vcf header to file given. Return writer object for that file.
 
@@ -370,16 +386,12 @@ def main():
     args = parse_args()
     outfile_base = args.output
 
-    if args.truth:
-        truth_fname = args.truth
-    else:
-        truth_fname = outfile_base + '.truth.vcf'
-    vcf_truth = get_vcf_writer(truth_fname)
+    vcf_truth = get_vcf_writer(args.truth)
 
     if args.seed: #XXX required?
         random.seed(args.seed)
 
-    # Add this many bases of padding to the start(left) of each locus so that
+    # Add this many bases of padding to the start (left) of each locus so that
     # all repeat units can be deleated without leaving a blank alt allele.
     pad_left = 1
 
@@ -414,12 +426,25 @@ def main():
             sys.stderr.write(str(e) + '\n')
             continue
 
+        # Get fasta with flanking sequence
+        this_ref = fastafile.fetch(chrom, start - args.flank, stop + args.flank).upper()
+        rel_start = args.flank
+        rel_stop = rel_start + stop - start
+        # Insert new alleles into the reference fasta with flanks
+        allele1_fasta = replace_variant(this_ref, allele1, rel_start, rel_stop)
+        allele2_fasta = replace_variant(this_ref, allele2, rel_start, rel_stop)
+
+        out_prefix = '{}{}-{}_{}_{}_{}'.format(args.output, chrom, start, repeatunit, deltas[0], deltas[1])
+
         # Write new alleles to fasta
-        print(allele1)
-        print(allele2)
+        sequences = [SeqRecord(Seq(allele1_fasta), id='{}_{}'.format(repeatunit, deltas[0]), description=''),
+                    SeqRecord(Seq(allele2_fasta), id='{}_{}'.format(repeatunit, deltas[1]), description='')]
+        with open(out_prefix + '.fasta', "w") as outfasta:
+            SeqIO.write(sequences, outfasta, "fasta")
 
         # Write bed file
-        print(bedout_line)
+        with open(out_prefix + '.bed', "w") as bed_out:
+            bed_out.write(bedout_line)
 
         # Write the true alleles
         vcf_start = start + 1 # convert to base 1 for vcf file

@@ -6,4 +6,5 @@ dependencies:
 - BioPython
 - pysam
 - pandas
+- pytest
 #- htslib
