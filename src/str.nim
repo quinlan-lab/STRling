@@ -8,6 +8,7 @@ import hts/bam
 import ./strpkg/cluster
 import ./strpkg/utils
 export tread
+export Soft
 import strformat
 import math
 import argparse
@@ -18,13 +19,13 @@ type Seq[T] = object
 
 type Seqs[T] = array[7, Seq[T]]
 
-type Options = object
-  median_fragment_length: int
-  proportion_repeat: float
-  min_mapq: uint8
+type Options* = object
+  median_fragment_length*: int
+  proportion_repeat*: float
+  min_mapq*: uint8
 
 
-proc init[T](): Seqs[T] =
+proc init*[T](): Seqs[T] =
   result = [
      Seq[T](A: newSeq[T](0)),
      Seq[T](A: newSeq[T](0)),
@@ -106,6 +107,7 @@ proc count(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
 
 # This is the bottleneck for run time at the moment
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
+  #repeat_count = 0
   if read.count('N') > 20: return
 
   var best_score: int = -1
@@ -137,7 +139,7 @@ proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align
   align_length = len(read)
   result = read.get_repeat(counts, repeat_count, opts)
 
-proc tostring(t:tread, targets: seq[Target]): string =
+proc tostring*(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
   var rep: string
   for v in t.repeat:
@@ -181,11 +183,11 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
   when defined(debug):
     result.qname = aln.qname
 
-type Cache = object
-  tbl: TableRef[string, tread]
-  cache: seq[tread]
+type Cache* = object
+  tbl*: TableRef[string, tread]
+  cache*: seq[tread]
 
-proc add_soft(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options, read_repeat:array[6, char]) =
+proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options, read_repeat:array[6, char]) =
   # if read_repeat is not empty, we are more permissive on the length of the
   # soft-clip as long as it has the same repeat unit.
 
