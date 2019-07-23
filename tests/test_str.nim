@@ -27,6 +27,7 @@ suite "str suite":
     var opts = Options(median_fragment_length: 500, proportion_repeat: 0.6, min_mapq: 20'u8)
     var counts = init[uint8]()
     var rep: array[6, char]
+    rep[0] = 'A'
 
     cache.add_soft(a, counts, opts, rep)
     check cache.cache.len == 1
