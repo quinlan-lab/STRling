@@ -107,7 +107,7 @@ proc count(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
 
 # This is the bottleneck for run time at the moment
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
-  #repeat_count = 0
+  repeat_count = 0
   if read.count('N') > 20: return
 
   var best_score: int = -1
