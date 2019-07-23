@@ -326,8 +326,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
 when isMainModule:
   import math
 
-
-
+  when not defined(danger):
+   stderr.write_line "warning !!! not compiled in fast mode. Compile with -d:danger to increase speed"
 
   #testing()
   #if true:
