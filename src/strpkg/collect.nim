@@ -40,6 +40,7 @@ proc find_read_position(A: Record, position:int): int =
   var
     r_off = A.start
     q_off = 0
+  result = -1
 
   for op in A.cigar:
     if r_off > position: return -1
@@ -78,7 +79,6 @@ proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
       support.qname = A.qname
 
     for cig in A.cigar:
-      # TODO: check if the sequence of this cigar op matches the repeat unit
       if cig.op == Cigarop.insert:
         support.SpanningReadCigarInsertionLen += cig.len.uint8
       if cig.op == Cigarop.deletion:
@@ -95,8 +95,9 @@ proc estimate_size*(spanners: seq[Support], frag_sizes: array[4096, uint32]): in
   var s = small_sizes[int(small_sizes.high/2)]
   return frag_sizes.median - s.int
 
-proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20): seq[Support] =
+proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): seq[Support] =
   var pairs = newTable[string, seq[Record]]()
+  doAssert left <= right
   for aln in b.query(bounds.tid.int, max(0, bounds.left.int - window), bounds.right.int + window):
      if aln.flag.secondary or aln.flag.supplementary: continue
      if aln.mapping_quality < min_mapq: continue
@@ -104,9 +105,18 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      var s:Support
      if aln.spanning_read(bounds, s):
        result.add(s)
+     if aln.tid != aln.mate_tid: continue
+     if aln.isize.abs > max_size: continue
 
+     # we could check here if we have 2 in the pair, process immediately, and remove.
+     # but deleting from a table is not cheap so current trade-off memory for speed.
+     # should instead add a reduced object with chrom, sequence, cigar
      pairs.mgetOrPut(aln.qname, @[]).add(aln.copy())
+     if pairs.len == 5_000:
+       stderr.write_line "large pairs seq in spanners() for " & $bounds
 
+  if pairs.len > 5_000:
+    stderr.write_line "large pairs seq in spanners() for " & $bounds & " got " & $pairs.len & " pairs"
   for qname, pair in pairs:
     if len(pair) != 2: continue
     var s: Support
