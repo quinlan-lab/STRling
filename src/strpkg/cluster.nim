@@ -116,7 +116,9 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
     # reps are on same chromosome and have same repeat unit
     var reps: seq[tread] = group.v
     # NOTE: skipping unplaced for now.
-    if reps[0].tid < 0: continue
+    if reps[0].tid < 0:
+      yield Cluster(reads: reps)
+      continue
     var i = 0
     var c:Cluster
     while i < reps.len:

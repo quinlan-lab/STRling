@@ -262,6 +262,11 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     cache.add_soft(aln, counts, opts, tr.repeat)
     doAssert not cache.tbl.hasKeyOrPut(aln.qname, tr), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
 
+proc tostring*(a:array[6, char]): string =
+  for c in a:
+    if c == 0.char: return
+    result.add(c)
+
 when isMainModule:
   import math
 
@@ -360,23 +365,30 @@ when isMainModule:
     nreads.inc
     cache.add(aln, counts, opts)
 
-  var reads_fh:File
-  var bounds_fh:File
-  var span_fh:File
+  var
+    reads_fh:File
+    bounds_fh:File
+    span_fh:File
+    unplaced_fh:File
   if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
     quit "couldn't open output file"
+  if not open(unplaced_fh, args.output_prefix & "-unplaced.txt", mode=fmWrite):
+    quit "couldn't open output file"
 
   var window = frag_dist.median(0.98)
+  var unplaced = newCountTable[array[6, char]]()
 
   reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=1):
-    if c.reads[0].tid == -1: continue
+    if c.reads[0].tid == -1:
+      unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
+      continue
     var b = c.bounds
     var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var estimate = spans.estimate_size(frag_dist)
@@ -390,8 +402,10 @@ when isMainModule:
   reads_fh.close
   bounds_fh.close
   span_fh.close
+  unplaced_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
     stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
     stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
     stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"
+    stderr.write_line &"wrote counts of unplaced fragments with STR content to {args.output_prefix}-unplaced.txt"
