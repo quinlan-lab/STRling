@@ -6,35 +6,13 @@ import random
 import tables
 import hts/bam
 import ./strpkg/cluster
+import ./strpkg/collect
 import ./strpkg/utils
 export tread
 export Soft
 import strformat
 import math
 import argparse
-
-type Seq[T] = object
-  imax: int
-  A: seq[T]
-
-type Seqs[T] = array[7, Seq[T]]
-
-type Options* = object
-  median_fragment_length*: int
-  proportion_repeat*: float
-  min_mapq*: uint8
-
-
-proc init*[T](): Seqs[T] =
-  result = [
-     Seq[T](A: newSeq[T](0)),
-     Seq[T](A: newSeq[T](0)),
-     Seq[T](A: newSeq[T](16)),
-     Seq[T](A: newSeq[T](64)),
-     Seq[T](A: newSeq[T](256)),
-     Seq[T](A: newSeq[T](1024)),
-     Seq[T](A: newSeq[T](4096)),
-  ]
 
 proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
   var i = -1
@@ -61,49 +39,6 @@ proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int
       if not aln.flag.proper_pair: continue
       if aln.isize < 0 or aln.isize > result.len: continue
       result[aln.isize].inc
-
-proc median(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
-  var n = sum(fragment_sizes)
-  var count = 0'u32
-  for i, cnt in fragment_sizes:
-    count += cnt
-    if count >=  uint32(0.5 + n.float / (1.0 / pct)):
-      return i
-  return fragment_sizes.len
-
-proc inc[T](s:var Seq[T], enc:uint64) {.inline.} =
-  s.A[enc.int].inc
-  if s.imax == -1 or s.A[enc] > s.A[s.imax]:
-    s.imax = enc.int
-
-proc argmax[T](s: Seq[T]): uint64 {.inline.} =
-  return s.imax.uint64
-
-proc clear[T](s: var Seq[T]) {.inline.} =
-  if s.imax == -1: return
-  zeroMem(s.A[0].addr, sizeof(T) * len(s.A))
-  s.imax = -1
-
-iterator slide_by*(s:string, k: int): uint64 {.inline.} =
-  ## given a string (DNA seq) yield the minimum kmer on the forward strand
-  var base: char
-  for i in countup(0, s.high - k + 1, k):
-    var f = s[i..<i+k].encode()
-    var kmin = f
-    for j in 0..<k:
-      base = s[i + j]
-      f.forward_add(base, k)
-      kmin = min(kmin, f)
-    yield kmin
-
-
-proc count(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
-  # count the repeats of length k in read and return the most frequent
-  count.clear
-  for enc in read.slide_by(k):
-    count.inc(enc)
-  if count.imax == -1: return 0
-  return count.A[count.imax].int
 
 # This is the bottleneck for run time at the moment
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
@@ -132,7 +67,7 @@ proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int
       # cant possibly see a repeat.
       break
 
-proc get_repeat(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
+proc get_repeat*(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
   # returns blank array if nothing passes.
   var read = ""
   aln.sequence(read)
@@ -171,6 +106,8 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
       align_length -= aln.cigar[0].len
     if aln.cigar[aln.cigar.len-1].op == CigarOp.soft_clip:
       align_length -= aln.cigar[aln.cigar.len-1].len
+  doAssert align_length > 0, aln.tostring
+  doAssert repeat_count < 256, aln.tostring
 
   result = tread(tid:aln.tid.int32,
                  position: aln.start.uint32,
@@ -382,9 +319,11 @@ when isMainModule:
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
   var frag_dist = ibam.fragment_length_distribution(skip_reads=skip_reads)
+  echo frag_dist[0..<1000]
   var frag_median = frag_dist.median
   if args.verbose:
     stderr.write_line "Calculated median fragment length:", frag_median
+    stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
   ibam.close()
   if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
@@ -423,24 +362,36 @@ when isMainModule:
 
   var reads_fh:File
   var bounds_fh:File
+  var span_fh:File
   if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
     quit "couldn't open output file"
+  if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
+    quit "couldn't open output file"
+
+  var window = frag_dist.median(0.98)
 
   reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
-  for c in cache.cache.cluster(max_dist=frag_dist.median(0.98).uint32, min_supporting_reads=1):
+  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=1):
     if c.reads[0].tid == -1: continue
-    bounds_fh.write_line c.bounds.tostring(targets)
+    var b = c.bounds
+    var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+    var estimate = spans.estimate_size(frag_dist)
+    bounds_fh.write_line b.tostring(targets) & "\testimate:" & $estimate
+    for s in spans:
+      span_fh.write_line s.tostring(b, targets[b.tid].name)
     for s in c.reads:
       reads_fh.write_line s.tostring(targets) & "\t" & $ci
     ci += 1
 
   reads_fh.close
   bounds_fh.close
+  span_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
     stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
     stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
+    stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"

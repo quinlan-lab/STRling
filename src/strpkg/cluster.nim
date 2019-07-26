@@ -45,15 +45,15 @@ proc tread_cmp(a: tread, b:tread): int =
       return cmp(a.repeat[i], b.repeat[i])
   return cmp(a.position, b.position)
 
-type Bounds = object
-  tid: int32
-  left: uint32
-  right: uint32
-  center_mass: uint32
-  n_left: uint16
-  n_right: uint16
-  n_total: uint16
-  repeat: string
+type Bounds* = object
+  tid*: int32
+  left*: uint32
+  right*: uint32
+  center_mass*: uint32
+  n_left*: uint16
+  n_right*: uint16
+  n_total*: uint16
+  repeat*: string
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
@@ -96,7 +96,7 @@ proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
   var lo = max(0, cl.posmed(mediani).int - max_dist.int).uint32
-  while len(cl.reads) > 0 and cl.reads[0].position < lo:
+  while len(cl.reads) > 1 and cl.reads[0].position < lo:
     cl.reads = cl.reads[1..cl.reads.high]
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
