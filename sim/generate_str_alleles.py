@@ -14,7 +14,7 @@ from Bio import SeqIO
 import pysam 
 import random
 import pandas as pd
-
+import itertools
 __author__ = 'Harriet Dashnow'
 __credits__ = ['Harriet Dashnow']
 __license__ = 'MIT'
@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument(
         '--output', type=str, required=False, default='',
         help='Base name for output files, including vcfs and bed files.')
+    parser.add_argument(
+        '--id', action="store_true",
+        help='Prefix individual fasta and bed output files with a numerical id.')
     parser.add_argument(
         '--truth', type=str, required=False, default='truth.vcf',
         help='File name for output vcf of true genotypes for all loci. (default: %(default)s)')
@@ -175,7 +178,7 @@ def parse_bed(bedfilename, position_base = 0, bed_dict = OrderedDict(), pad_left
                 name = None
                 repeatunit = None
                 deltas = None
-            unique_id = '{0}-{1}-{2}'.format(ref_chr,ref_start,ref_stop)
+            unique_id = '{0}-{1}-{2}-{3}'.format(ref_chr, ref_start, ref_stop, name)
             if unique_id not in bed_dict:
                 bed_dict[unique_id] = {'chr':ref_chr, 'start':ref_start,
                                         'stop':ref_stop, 'name':name,
@@ -404,7 +407,7 @@ def main():
     fastafile = pysam.Fastafile(args.ref)
 
     vcf_probs_dict = {}
-    for region in bed_dict:
+    for (region, i) in zip(bed_dict, range(len(bed_dict))): 
         chrom = bed_dict[region]['chr']
         start = bed_dict[region]['start'] # These positions are in base-0
         stop = bed_dict[region]['stop']
@@ -434,7 +437,10 @@ def main():
         allele1_fasta = replace_variant(this_ref, allele1, rel_start, rel_stop)
         allele2_fasta = replace_variant(this_ref, allele2, rel_start, rel_stop)
 
-        out_prefix = '{}{}-{}_{}_{}_{}'.format(args.output, chrom, start, repeatunit, deltas[0], deltas[1])
+        if args.id:
+            out_prefix = '{}{}.{}-{}_{}_{}_{}'.format(args.output, i, chrom, start, repeatunit, deltas[0], deltas[1])
+        else:
+            out_prefix = '{}{}-{}_{}_{}_{}'.format(args.output, chrom, start, repeatunit, deltas[0], deltas[1])
 
         # Write new alleles to fasta
         sequences = [SeqRecord(Seq(allele1_fasta), id='{}_{}'.format(repeatunit, deltas[0]), description=''),
