@@ -3,21 +3,7 @@
 
 // Set up to run on the redwood cluster
 
-INSTALLDIR="~/storage/git/str-dev"
-ART="~/tools/art_bin_MountRainier"
-REF="/uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/ref-data/GATK_Bundle/human_g1k_v37_decoy.fasta"
-TOOLS="$INSTALLDIR/sim" //custom R/python scripts
-GATK="~/tools/gatk-4.1.2.0/gatk"
-
-//Compiled in regular mode
-//STR_NIM="/uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/git/str-dev/str"
-//Compiled in debug mode
-STR_NIM="/uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/git/str-dev/src/str"
-//Quick share debug mode
-//STR_NIM="/tmp/str"
-
-DECOY_REF="$INSTALLDIR/simulate_reads/reference-data/hg19.STRdecoys.sorted.fasta"
-EXOME_TARGET="/group/bioi1/harrietd/ref-data/hg19_RefSeq_coding.sorted.bed"
+source('pipeline_config.groovy')
 
 // Adjust simulation parameters
 PLATFORM="illumina"
