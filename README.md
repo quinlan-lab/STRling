@@ -12,6 +12,11 @@ cd str-dev
 nimble install
 ```
 
+Compile options for development:  
+
+Compile in fast mode (danger) with read names reported:  
+`nim c -d:danger -d:qname src/str.nim`
+
 ## Run
 `./str`
 
