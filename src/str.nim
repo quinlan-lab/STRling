@@ -81,7 +81,7 @@ proc tostring*(t:tread, targets: seq[Target]): string =
     if v == 0.char: continue
     rep.add(v)
   result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
-  when defined(debug):
+  when defined(debug) or defined(qname):
     result &= "\t" & t.qname
 
 proc repeat_length(t:tread): uint8 {.inline.} =
@@ -117,7 +117,7 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
                  align_length: align_length.uint8,
                  split: Soft.none,
                  mapping_quality: aln.mapping_quality)
-  when defined(debug):
+  when defined(debug) or defined(qname):
     result.qname = aln.qname
 
 type Cache* = object
@@ -160,7 +160,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
                   split: if cig_index == 0: Soft.left else: Soft.right,
                   mapping_quality: aln.mapping_quality
                   ))
-    when defined(debug):
+    when defined(debug) or defined(qname):
       cache.cache[cache.cache.high].qname = aln.qname
 
 proc should_reverse(f:Flag): bool {.inline.} =

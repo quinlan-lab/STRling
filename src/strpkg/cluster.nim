@@ -21,7 +21,7 @@ type tread* = object
   mapping_quality*: uint8
   repeat_count*: uint8
   align_length*: uint8
-  when defined(debug):
+  when defined(debug) or defined(qname):
     qname*: string
 
 type Cluster* = object
