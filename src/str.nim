@@ -347,6 +347,7 @@ when isMainModule:
 
   var nreads = 0
   var counts = init[uint8]()
+  stderr.write_line "collecting str-like reads"
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
 
@@ -365,6 +366,7 @@ when isMainModule:
     nreads.inc
     cache.add(aln, counts, opts)
 
+  stderr.write_line "[str] done reading bam, starting clustering"
   var
     reads_fh:File
     bounds_fh:File
@@ -380,7 +382,6 @@ when isMainModule:
     quit "couldn't open output file"
 
   var window = frag_dist.median(0.98)
-  var unplaced = newCountTable[array[6, char]]()
 
   reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
@@ -390,6 +391,9 @@ when isMainModule:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       continue
     var b = c.bounds
+    if b.right - b.left > 1000'u32:
+      stderr.write_line "large bounds:" & $b & " skipping"
+      continue
     var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var estimate = spans.estimate_size(frag_dist)
     bounds_fh.write_line b.tostring(targets) & "\testimate:" & $estimate

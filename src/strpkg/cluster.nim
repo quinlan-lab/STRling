@@ -34,8 +34,8 @@ proc posmed(cl:Cluster, n:int=5): uint32 =
   let mid = int(min(mediani, cl.reads.len) / 2 - 0.5)
   return cl.reads[mid].position
 
-proc bytidrep(t:tread): tuple[repeat:array[6, char], tid:int32] =
-  return (t.repeat, t.tid)
+proc bytidrep(t:tread): tuple[tid:int32, repeat:array[6, char]] =
+  return (t.tid, t.repeat)
 
 # Sorts the reads by chromosome (tid) then repeat unit, then by position
 proc tread_cmp(a: tread, b:tread): int =
@@ -115,10 +115,12 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
   for group in groupby(tandems, bytidrep):
     # reps are on same chromosome and have same repeat unit
     var reps: seq[tread] = group.v
-    # NOTE: skipping unplaced for now.
+
     if reps[0].tid < 0:
+      stderr.write_line "yielding " & $reps.len & " unplaced reads with repaeat: " & $reps[0].repeat
       yield Cluster(reads: reps)
       continue
+
     var i = 0
     var c:Cluster
     while i < reps.len:
