@@ -20,14 +20,15 @@ proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int
   var skipped = newSeqOfCap[Record](skip_reads)
   for aln in bam:
     i += 1
+    if not aln.flag.proper_pair: continue
+    if aln.flag.supplementary or aln.flag.secondary: continue
+    if aln.isize < 0: continue
+    if aln.isize > result.len: continue
     if i < skip_reads:
       skipped.add(aln.copy())
       continue
     else:
       skipped.setLen(0)
-    if not aln.flag.proper_pair: continue
-    if aln.isize < 0: continue
-    if aln.isize > result.len: continue
     result[aln.isize].inc
     counted += 1
     if counted > n_reads: break
@@ -44,6 +45,7 @@ proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
   repeat_count = 0
   if read.count('N') > 20: return
+  var s = newString(6)
 
   var best_score: int = -1
   for k in 2..6:
@@ -56,10 +58,10 @@ proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int
     best_score = score
     if count > (read.len.float * opts.proportion_repeat / k.float).int:
       # now check the actual string because the kmer method can't track phase
-      var s = newString(k)
+      s = newString(k)
       counts[k].argmax.decode(s)
       if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
-        copyMem(result[0].addr, s[0].addr, k)
+        copyMem(result.addr, s[0].addr, k)
         repeat_count = count
     elif count < (read.len.float * 0.12 / k.float).int:
       # e.g. for a 5 mer repeat, we should see some 2, 3, 4 mer reps and we can
@@ -313,27 +315,29 @@ when isMainModule:
     quit 0
 
   var t0 = cpuTime()
-  var ibam:Bam
+  var ibam_dist:Bam
   var proportion_repeat = parseFloat(args.proportion_repeat)
   var skip_reads = parseInt(args.skip)
 
-  if not open(ibam, args.bam, fai=args.fasta, threads=2):
+  if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
-  discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
+  discard ibam_dist.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
-  var frag_dist = ibam.fragment_length_distribution(skip_reads=skip_reads)
+  var frag_dist = ibam_dist.fragment_length_distribution(skip_reads=skip_reads)
   echo frag_dist[0..<1000]
   var frag_median = frag_dist.median
   if args.verbose:
     stderr.write_line "Calculated median fragment length:", frag_median
     stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
-  ibam.close()
+  ibam_dist.close()
+  ibam_dist = nil
+  var ibam:Bam
   if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
     quit "couldn't open bam"
-  cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int
+  cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
 
