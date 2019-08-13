@@ -13,14 +13,7 @@ run {
         generate_alleles +
 
         "%.fasta" * [
-            generate_reads
-        ] +
-
-        "%.fq" * [
-            gzip
-        ] +
-
-        "%_R*.fastq.gz" * [
+            generate_reads +
             align_bwa + index_bam + str
         ]
 }

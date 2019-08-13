@@ -48,14 +48,31 @@ generate_reads = {
     }
 }
 
-gzip = {
+/////////////////////////////
+// Generate reads
+generate_reads = {
+    doc "Sample reads from the altered reference sequence segment using an empirical insert size distribution"
+
     output.dir = "sim"
 
-    produce(input.prefix + ".fastq.gz") {
-        exec "cat $inputs.fq | gzip -c > $output.gz"
+    produce( get_fname(input.fasta.prefix) + "_L001_read1.fq.gz", get_fname(input.fasta.prefix) + "_L001_read2.fq.gz") {
+
+        // Set target coverage
+        def coverage = total_coverage
+        def outname = output.prefix.prefix[0..-7]
+        exec """
+            $PYTHON27  ~/storage/git/neat-genreads/genReads.py
+                -R 150
+                --pe-model $MODELS/fraglen.p
+                --gz
+                --rng 7
+                -c $coverage
+                -r $input.fasta
+                -o $outname
+
+        """
     }
 }
-
 
 /////////////////////////////
 // Align reads
@@ -68,7 +85,7 @@ align_bwa = {
     def fname = get_fname(input1)
     def lane = "001"
     def sample = branch.name
-    from("fastq.gz", "fastq.gz") produce(fname.prefix.prefix + ".bam") {
+    from("fq.gz", "fq.gz") produce(fname.prefix.prefix + ".bam") {
         exec """
             bwa mem -M
             -R "@RG\\tID:${sample}\\tPL:$PLATFORM\\tPU:1\\tLB:${sample}\\tSM:${sample}"
