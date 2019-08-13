@@ -1,0 +1,117 @@
+// Bpipe pipeline to simulate paired end reads from a fasta file, with no stutter
+// Simulates reads from STR alleles at a provided set of loci
+
+// Adjust simulation parameters
+PLATFORM="illumina"
+total_coverage = 30
+
+def get_fname(path) {
+    def x = path.split("/")[-1]
+    return(x)
+}
+
+/////////////////////////////
+// Produce mutated fasta files
+generate_alleles = {
+    doc "Generate fasta files of STR variants based on the input bed file"
+
+    output.dir = "sim"
+
+    def bedname = get_fname(input.bed)
+
+        produce(bedname.prefix + ".truth.vcf", "*.fasta") {
+
+            exec """
+                $PYTHON $TOOLS/generate_str_alleles.py $REF $input.bed --output $dir/ --truth $output.vcf --flank 50000 --id
+        """
+        }
+}
+
+/////////////////////////////
+// Generate reads
+generate_reads = {
+    doc "Sample reads from the altered reference sequence segment"
+
+    output.dir = "sim"
+
+    produce( get_fname(input.fasta.prefix) + "_L001_R1.fq", get_fname(input.fasta.prefix) + "_L001_R2.fq") {
+
+        // Set target coverage
+        def coverage = total_coverage
+        def outname = output.prefix[0..-2]
+        exec """
+            $ART/art_illumina -i $input.fasta -p -na
+                -l 150 -ss HS25 -f $coverage
+                -m 350 -s 120
+                -o $outname
+        """
+    }
+}
+
+gzip = {
+    output.dir = "sim"
+
+    produce(input.prefix + ".fastq.gz") {
+        exec "cat $inputs.fq | gzip -c > $output.gz"
+    }
+}
+
+
+/////////////////////////////
+// Align reads
+@preserve("*.bam")
+align_bwa = {
+    doc "Concatenate with background reads then align with bwa mem algorithm."
+
+    output.dir = "sim"
+
+    def fname = get_fname(input1)
+    def lane = "001"
+    def sample = branch.name
+    from("fastq.gz", "fastq.gz") produce(fname.prefix.prefix + ".bam") {
+        exec """
+            bwa mem -M
+            -R "@RG\\tID:${sample}\\tPL:$PLATFORM\\tPU:1\\tLB:${sample}\\tSM:${sample}"
+            $REF
+            $input1.gz
+            $input2.gz |
+            samtools view -bSuh - | samtools sort -o $output.bam -T $output.bam.prefix
+        """, "bwamem"
+    }
+}
+
+index_bam = {
+
+    output.dir = "sim"
+
+    transform("bam") to ("bam.bai") {
+        exec "samtools index $input.bam"
+    }
+    forward input
+}
+
+str = {
+
+    output.dir = "str"
+
+    def bamname = get_fname(input.bam)
+
+    produce(bamname.prefix + "-reads.txt", bamname.prefix + "-bounds.txt") {
+        exec """
+            $STR_NIM 
+                -p 0.7
+                -v
+                -o ${output.dir + '/' + bamname.prefix}
+                $input.bam
+        """
+    }
+}
+
+combine = {
+
+        exec """
+            python $TOOLS/combine_random_sim_results.py --bed_dir sim --str_dir str --out HTT
+        """
+}
+
+
