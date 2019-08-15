@@ -225,6 +225,16 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
   elif A.mapping_quality >= opts.min_mapq or A.flag.proper_pair:
     A.position += uint32(A.align_length.float / 2'f + 0.5) # Record position as middle of A
 
+# Return true if both reads in pair are STR, or one is STR, one low mapping qual
+proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
+  if A.p_repeat > opts.proportion_repeat and B.p_repeat > opts.proportion_repeat:
+    return true
+  if A.p_repeat > opts.proportion_repeat and B.mapping_quality < opts.min_mapq:
+    return true
+  if B.p_repeat > opts.proportion_repeat and A.mapping_quality < opts.min_mapq:
+    return true
+  return false
+ 
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
 
@@ -240,10 +250,8 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     cache.add_soft(aln, counts, opts, self.repeat)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
 
-    var all_str_thresh = 0.9 #XXX Put this somewhere sensible (add it to Options)
-
-    # If both reads in pair are STR, set position to unknown
-    if self.p_repeat > all_str_thresh and mate.p_repeat > all_str_thresh:
+    # If both reads in pair are STR, or one is STR, one low mapping qual, set position to unknown
+    if unplaced_pair(self, mate, opts):
       # NOTE: we don't know if we need to reverse complement these reads
       # so we will have to equate forward and reverse repeat units later.
       self.position = uint32(0)
@@ -263,6 +271,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     var tr = aln.to_tread(counts, opts)
     cache.add_soft(aln, counts, opts, tr.repeat)
     doAssert not cache.tbl.hasKeyOrPut(aln.qname, tr), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+
 
 proc tostring*(a:array[6, char]): string =
   for c in a:
@@ -326,7 +335,7 @@ when isMainModule:
   discard ibam_dist.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
   var frag_dist = ibam_dist.fragment_length_distribution(skip_reads=skip_reads)
-  echo frag_dist[0..<1000]
+  #echo frag_dist[0..<1000]
   var frag_median = frag_dist.median
   if args.verbose:
     stderr.write_line "Calculated median fragment length:", frag_median

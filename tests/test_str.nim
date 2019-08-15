@@ -60,3 +60,23 @@ suite "str suite":
 
     var rep = a.get_repeat(counts, repeat_count, align_length, opts)
     check rep == ['A', 'A', '\x00', '\x00', '\x00', '\x00']
+
+
+  test "unplaced read pair: both str":
+    var opts = Options(median_fragment_length: 500, proportion_repeat: 0.8, min_mapq: 20'u8)
+    var A = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], repeat_count: 150'u8, mapping_quality: 30)
+    var B = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], repeat_count: 150'u8, mapping_quality: 30)
+    check unplaced_pair(A, B, opts) == true 
+
+  test "unplaced read pair: one str, one low mapq":
+    var opts = Options(median_fragment_length: 500, proportion_repeat: 0.8, min_mapq: 20'u8)
+    var A = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], repeat_count: 150'u8, mapping_quality: 16)
+    var B = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['\x00', '\x00', '\x00', '\x00', '\x00', '\x00'], repeat_count: 0'u8, mapping_quality: 16)
+    check unplaced_pair(A, B, opts) == true 
+
+  test "unplaced read pair: false":
+    var opts = Options(median_fragment_length: 500, proportion_repeat: 0.8, min_mapq: 20'u8)
+    var A = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['\x00', '\x00', '\x00', '\x00', '\x00', '\x00'], repeat_count: 150'u8, mapping_quality: 30)
+    var B = tread(qname:"my_qname", tid:0'i32, position: 222'u32, split: Soft.none, repeat: ['\x00', '\x00', '\x00', '\x00', '\x00', '\x00'], repeat_count: 0'u8, mapping_quality: 30)
+    check unplaced_pair(A, B, opts) == false
+
