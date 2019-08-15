@@ -92,6 +92,12 @@ proc bounds*(cl:Cluster): Bounds =
   else:
     result.right = result.center_mass
 
+  # If one bound is missing, replace it with the other
+  if (result.left == 0) and (result.right > 0'u32):
+    result.left = result.right
+  if (result.right == 0) and (result.left > 0'u32):
+    result.right = result.left
+
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
