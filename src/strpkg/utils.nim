@@ -41,6 +41,7 @@ type Options* = object
   median_fragment_length*: int
   proportion_repeat*: float
   min_mapq*: uint8
+  min_support*: int
 
 proc percentile*(fragment_sizes: array[4096, uint32], fragment_length:int): float =
   var total = sum(fragment_sizes)

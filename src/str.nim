@@ -312,6 +312,8 @@ when isMainModule:
   var p = newParser("str"):
     option("-f", "--fasta", help="path to fasta file")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
+    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
+    option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
     option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
     flag("-v", "--verbose")
@@ -326,6 +328,8 @@ when isMainModule:
   var t0 = cpuTime()
   var ibam_dist:Bam
   var proportion_repeat = parseFloat(args.proportion_repeat)
+  var min_support = parseInt(args.min_support)
+  var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = parseInt(args.skip)
 
   if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
@@ -356,7 +360,8 @@ when isMainModule:
   shallow(decodeds)
 
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
-  var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat, min_mapq: 20'u8)
+  var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
+                      min_support: min_support, min_mapq: min_mapq)
 
   var nreads = 0
   var counts = init[uint8]()
@@ -399,7 +404,7 @@ when isMainModule:
   reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
   var ci = 0
-  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=1):
+  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       continue
