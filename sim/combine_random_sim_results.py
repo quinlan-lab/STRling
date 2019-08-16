@@ -36,13 +36,37 @@ def parse_bed(f):
         return(alleles)
 
 def parse_bounds(all_files):
-    header = 'chrom, left, right, mean-position-of-non-split reads, number-of-left-splits, number-of-right-splits, n-total-str-reads, repeat-unit'
+    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,estimate'
     all_df_bounds = []
     for f in all_files:
         df = pd.read_csv(f, sep='\t', names=header.split(','))
+        try:
+            df['estimate'] = df.estimate.str.split(':',expand=True,).iloc[:,1]
+        except IndexError:
+            pass
         df['sim'] = get_sim_str(f)
         all_df_bounds.append(df)
     all_df = pd.concat(all_df_bounds)
+    return(all_df)
+
+def parse_spans(all_files):
+    header = 'chrom,left,right,FragmentLength,FragmentPercentile,RepeatCount,DeletionLen,InsertionLen,qname'
+    all_df_list = []
+    for f in all_files:
+        df = pd.read_csv(f, sep='\t', names=header.split(','))
+        df['sim'] = get_sim_str(f)
+        all_df_list.append(df)
+    all_df = pd.concat(all_df_list)
+    return(all_df)
+
+def parse_unplaced(all_files):
+    header = 'repeatunit,count'
+    all_df_list = []
+    for f in all_files:
+        df = pd.read_csv(f, sep='\t', names=header.split(','))
+        df['sim'] = get_sim_str(f)
+        all_df_list.append(df)
+    all_df = pd.concat(all_df_list)
     return(all_df)
 
 def main():
@@ -56,13 +80,22 @@ def main():
     for f in bedfiles:
         sim = get_sim(f)
         bed_df.loc[int(sim)] = parse_bed(f)+[sim]
-    print(bed_df)
     bed_df.to_csv(args.out + '-sims.csv', index=False)
     
     boundsfiles = glob.glob(args.str_dir+"/*-bounds.txt")
     if len(boundsfiles) == 0:
         sys.exit('ERROR: No -bounds.txt files found in the given directory: ' + args.str_dir)
     parse_bounds(boundsfiles).to_csv(args.out + '-bounds.csv', index=False)
+
+    spansfiles = glob.glob(args.str_dir+"/*-spanning.txt")
+    if len(spansfiles) == 0:
+        sys.exit('ERROR: No -spanning.txt files found in the given directory: ' + args.str_dir)
+    parse_spans(spansfiles).to_csv(args.out + '-spans.csv', index=False)
+
+    unplacedfiles = glob.glob(args.str_dir+"/*-unplaced.txt")
+    if len(unplacedfiles) == 0:
+        sys.exit('ERROR: No -unplaced.txt files found in the given directory: ' + args.str_dir)
+    parse_unplaced(unplacedfiles).to_csv(args.out + '-unplaced.csv', index=False)
 
     readsfiles = glob.glob(args.str_dir+"/*-reads.txt")
     if len(readsfiles) == 0:
