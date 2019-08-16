@@ -4,6 +4,7 @@ import strformat
 import tables
 import itertools
 import hts/bam
+import strutils
 
 type Soft* {.size:1, pure.} = enum
   left
@@ -54,6 +55,14 @@ type Bounds* = object
   n_right*: uint16
   n_total*: uint16
   repeat*: string
+
+# Parse a regions file
+proc parse_bounds*(l:string): Bounds =
+  var l_split = l.splitWhitespace()
+  result.tid = int32(parseInt(l_split[0]) - 1) #XXX this will only work for number chomosomes, need to convert this properly
+  result.left = uint32(parseInt(l_split[1]))
+  result.right = uint32(parseInt(l_split[2]))
+  result.repeat = l_split[3]
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =

@@ -315,6 +315,7 @@ when isMainModule:
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
+    option("-l", "--loci", help="File specifying additional STR loci to genotype. Format is: chr start stop repeatunit")
     option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
@@ -331,6 +332,10 @@ when isMainModule:
   var min_support = parseInt(args.min_support)
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = parseInt(args.skip)
+
+  if args.loci != "":
+    if not fileExists(args.loci):
+      quit "couldn't open loci file"
 
   if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
     quit "couldn't open bam"
