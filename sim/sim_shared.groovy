@@ -29,24 +29,24 @@ generate_alleles = {
 
 /////////////////////////////
 // Generate reads
-generate_reads = {
-    doc "Sample reads from the altered reference sequence segment"
-
-    output.dir = "sim"
-
-    produce( get_fname(input.fasta.prefix) + "_L001_R1.fq", get_fname(input.fasta.prefix) + "_L001_R2.fq") {
-
-        // Set target coverage
-        def coverage = total_coverage
-        def outname = output.prefix[0..-2]
-        exec """
-            $ART/art_illumina -i $input.fasta -p -na
-                -l 150 -ss HS25 -f $coverage
-                -m 350 -s 120
-                -o $outname
-        """
-    }
-}
+//generate_reads = {
+//    doc "Sample reads from the altered reference sequence segment"
+//
+//    output.dir = "sim"
+//
+//    produce( get_fname(input.fasta.prefix) + "_L001_R1.fq", get_fname(input.fasta.prefix) + "_L001_R2.fq") {
+//
+//        // Set target coverage
+//        def coverage = total_coverage
+//        def outname = output.prefix[0..-2]
+//        exec """
+//            $ART/art_illumina -i $input.fasta -p -na
+//                -l 150 -ss HS25 -f $coverage
+//                -m 350 -s 120
+//                -o $outname
+//        """
+//    }
+//}
 
 /////////////////////////////
 // Generate reads
@@ -65,7 +65,6 @@ generate_reads = {
                 -R 150
                 --pe-model $MODELS/fraglen.p
                 --gz
-                --rng 7
                 -c $coverage
                 -r $input.fasta
                 -o $outname
