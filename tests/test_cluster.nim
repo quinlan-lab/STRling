@@ -94,8 +94,9 @@ suite "cluster suite":
 #    check b.right == 3
 
   test "test parse STR region":
-    var l = "1 1 100 CAG"
-    var b = parse_bounds(l)
+    var l = "chr1 1 100 CAG"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    var b = parse_bounds(l, targets)
     check b.tid == 0
     check b.left == 1
     check b.right == 100

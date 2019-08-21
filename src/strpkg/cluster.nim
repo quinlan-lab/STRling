@@ -5,6 +5,7 @@ import tables
 import itertools
 import hts/bam
 import strutils
+import utils
 
 type Soft* {.size:1, pure.} = enum
   left
@@ -57,9 +58,9 @@ type Bounds* = object
   repeat*: string
 
 # Parse a regions file
-proc parse_bounds*(l:string): Bounds =
+proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.splitWhitespace()
-  result.tid = int32(parseInt(l_split[0]) - 1) #XXX this will only work for number chomosomes, need to convert this properly
+  result.tid = int32(get_tid(l_split[0], targets))
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
