@@ -390,6 +390,8 @@ when isMainModule:
     cache.add(aln, counts, opts)
 
   stderr.write_line "[str] done reading bam, starting clustering"
+
+  ### discovery
   var
     reads_fh:File
     bounds_fh:File
@@ -425,6 +427,12 @@ when isMainModule:
     for s in c.reads:
       reads_fh.write_line s.tostring(targets) & "\t" & $ci
     ci += 1
+
+  ### end discovery
+  ## genotyping
+
+  # ???
+   
 
   reads_fh.close
   bounds_fh.close
