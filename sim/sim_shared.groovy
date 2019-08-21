@@ -117,6 +117,7 @@ str = {
             $STR_NIM 
                 -p 0.7
                 -v
+                -l htt_locus.bed
                 -o ${output.dir + '/' + bamname.prefix}
                 $input.bam
         """

@@ -102,3 +102,9 @@ suite "cluster suite":
     check b.right == 100
     check b.repeat == "CAG"
 
+  test "test parse STR bed file":
+    var f = "test_str_parse.bed"
+    var text = "chr1 1 100 CAG\nchr1 1 100 CAG"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    writeFile(f, text)
+    check parse_loci(f, targets)[1].tid == 0

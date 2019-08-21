@@ -100,6 +100,6 @@ proc get_tid*(name:string, targets: seq[Target]): int =
   for t in targets:
     if t.name == name:
       return t.tid
-    return -1
+  return -1
 
 

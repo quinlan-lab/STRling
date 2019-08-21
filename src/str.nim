@@ -315,7 +315,7 @@ when isMainModule:
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
-    option("-l", "--loci", help="File specifying additional STR loci to genotype. Format is: chr start stop repeatunit")
+    option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit")
     option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
@@ -357,7 +357,6 @@ when isMainModule:
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
-
 
   var decodeds = newSeq[string](7)
   for i, s in decodeds.mpairs:
@@ -429,7 +428,21 @@ when isMainModule:
     ci += 1
 
   ### end discovery
-  ## genotyping
+
+  if args.loci != "":
+    # Parse bed file of regions and report spanning reads
+    var loci = parse_loci(args.loci, targets)
+    for b in loci:
+      if b.right - b.left > 1000'u32:
+        stderr.write_line "large bounds:" & $b & " skipping"
+        continue
+      var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+      var estimate = spans.estimate_size(frag_dist)
+      bounds_fh.write_line b.tostring(targets) & "\testimate:" & $estimate
+      for s in spans:
+        span_fh.write_line s.tostring(b, targets[b.tid].name)
+
+  ### genotyping
 
   # ???
    

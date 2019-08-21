@@ -57,13 +57,20 @@ type Bounds* = object
   n_total*: uint16
   repeat*: string
 
-# Parse a regions file
+# Parse single line of a an STR loci file
 proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.splitWhitespace()
+  if len(l_split) != 4:
+    quit fmt"Error reading loci bed file. Expected 4 fields and got {len(l_split)} on line: {l}"
   result.tid = int32(get_tid(l_split[0], targets))
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
+
+# Parse an STR loci bed file
+proc parse_loci*(f:string, targets: seq[Target]): seq[Bounds] =
+  for line in lines f:
+    result.add(parse_bounds(string(line), targets))
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
