@@ -58,6 +58,17 @@ type Bounds* = object
   repeat*: string
   name*: string
 
+proc `==`(a,b: Bounds): bool =
+  if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
+    return true
+
+# Check if two Bounds overlap. Assumes left <= right in both Bounds
+proc overlaps(a,b: Bounds): bool =
+  if a.tid == b.tid and a.repeat == b.repeat:
+    var ileft = max(a.left, b.left) #lower bound of intersection interval
+    var iright = min(a.right, b.right) #upper bound of intersection interval
+    return ileft <= iright #interval non-empty?
+
 # Parse single line of a an STR loci file
 proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.splitWhitespace()
@@ -71,6 +82,7 @@ proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
+  doAssert(result.left <= result.right)
 
 # Parse an STR loci bed file
 proc parse_loci*(f:string, targets: seq[Target]): seq[Bounds] =
@@ -119,6 +131,9 @@ proc bounds*(cl:Cluster): Bounds =
     result.left = result.right
   if (result.right == 0) and (result.left > 0'u32):
     result.right = result.left
+
+  # If left is > right... XXX TODO
+  #doAssert(result.left <= result.right)
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return

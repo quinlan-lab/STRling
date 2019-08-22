@@ -2,6 +2,27 @@ import unittest
 include strpkg/cluster
 
 suite "cluster suite":
+
+  test "bounds equal":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 1, right: 100)
+    check a == b
+
+  test "bounds unequal":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 2, right: 100)
+    check not (a == b)
+
+  test "bounds overlap":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 50, right: 100)
+    check a.overlaps(b)
+
+  test "bounds don't overlap":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 200, right: 300)
+    check a.overlaps(b) == false
+
   test "test clustering":
 
     var reads = @[
