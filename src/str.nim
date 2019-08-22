@@ -409,12 +409,26 @@ when isMainModule:
 
   reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   var targets = ibam.hdr.targets
+
+  var loci: seq[Bounds]
+  if args.loci != "":
+    # Parse bed file of regions and report spanning reads
+    loci = parse_loci(args.loci, targets)
+
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       continue
     var b = c.bounds
+
+    # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
+    for locus in loci:
+      if b.overlaps(locus):
+        b.name = locus.name
+        b.left = locus.left
+        b.right = locus.right
+
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
@@ -429,21 +443,7 @@ when isMainModule:
 
   ### end discovery
 
-  if args.loci != "":
-    # Parse bed file of regions and report spanning reads
-    var loci = parse_loci(args.loci, targets)
-    for b in loci:
-      if b.right - b.left > 1000'u32:
-        stderr.write_line "large bounds:" & $b & " skipping"
-        continue
-      var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
-      var estimate = spans.estimate_size(frag_dist)
-      bounds_fh.write_line b.tostring(targets) & "\testimate:" & $estimate
-      for s in spans:
-        span_fh.write_line s.tostring(b, targets[b.tid].name)
-
   ### genotyping
-
   # ???
    
 

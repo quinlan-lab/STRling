@@ -63,7 +63,7 @@ proc `==`(a,b: Bounds): bool =
     return true
 
 # Check if two Bounds overlap. Assumes left <= right in both Bounds
-proc overlaps(a,b: Bounds): bool =
+proc overlaps*(a,b: Bounds): bool =
   if a.tid == b.tid and a.repeat == b.repeat:
     var ileft = max(a.left, b.left) #lower bound of intersection interval
     var iright = min(a.right, b.right) #upper bound of intersection interval
