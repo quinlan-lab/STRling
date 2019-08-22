@@ -56,12 +56,17 @@ type Bounds* = object
   n_right*: uint16
   n_total*: uint16
   repeat*: string
+  name*: string
 
 # Parse single line of a an STR loci file
 proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.splitWhitespace()
-  if len(l_split) != 4:
-    quit fmt"Error reading loci bed file. Expected 4 fields and got {len(l_split)} on line: {l}"
+  if len(l_split) == 4:
+    discard
+  elif len(l_split) == 5:
+    result.name = l_split[4]
+  else:
+    quit fmt"Error reading loci bed file. Expected 4 or 5 fields and got {len(l_split)} on line: {l}"
   result.tid = int32(get_tid(l_split[0], targets))
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
@@ -123,7 +128,7 @@ proc trim(cl:var Cluster, max_dist:uint32) =
     cl.reads = cl.reads[1..cl.reads.high]
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
-  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}"
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}\t{b.name}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string

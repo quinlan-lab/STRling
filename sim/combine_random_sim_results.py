@@ -36,7 +36,7 @@ def parse_bed(f):
         return(alleles)
 
 def parse_bounds(all_files):
-    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,estimate'
+    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,estimate'
     all_df_bounds = []
     for f in all_files:
         df = pd.read_csv(f, sep='\t', names=header.split(','))
