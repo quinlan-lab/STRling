@@ -423,11 +423,14 @@ when isMainModule:
     var b = c.bounds
 
     # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
-    for locus in loci:
+    for i, locus in loci:
       if b.overlaps(locus):
         b.name = locus.name
         b.left = locus.left
         b.right = locus.right
+        # Remove locus from loci (therefore will use first matching bound and locus)
+        loci.del(i)
+        break
 
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
@@ -441,6 +444,17 @@ when isMainModule:
       reads_fh.write_line s.tostring(targets) & "\t" & $ci
     ci += 1
 
+  # Report spanning reads/pairs for any remaining loci that were not matched with a bound
+  for locus in loci:
+    if locus.right - locus.left > 1000'u32:
+      stderr.write_line "large bounds:" & $locus & " skipping"
+      continue
+    var spans = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
+    var estimate = spans.estimate_size(frag_dist)
+    bounds_fh.write_line locus.tostring(targets) & "\testimate:" & $estimate
+    for s in spans:
+      span_fh.write_line s.tostring(locus, targets[locus.tid].name)
+ 
   ### end discovery
 
   ### genotyping
