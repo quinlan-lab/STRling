@@ -315,7 +315,7 @@ when isMainModule:
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
-    option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit")
+    option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
