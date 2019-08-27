@@ -14,33 +14,6 @@ import strformat
 import math
 import argparse
 
-proc fragment_length_distribution(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
-  var i = -1
-  var counted:int = 0
-  var skipped = newSeqOfCap[Record](skip_reads)
-  for aln in bam:
-    i += 1
-    if not aln.flag.proper_pair: continue
-    if aln.flag.supplementary or aln.flag.secondary: continue
-    if aln.isize < 0: continue
-    if aln.isize > result.len: continue
-    if i < skip_reads:
-      skipped.add(aln.copy())
-      continue
-    else:
-      skipped.setLen(0)
-    result[aln.isize].inc
-    counted += 1
-    if counted > n_reads: break
-
-  if result.sum == 0:
-    # mostly for debugging and testing on small bams.
-    stderr.write_line "using first reads in fragment_length_distribution calculation as there were not enough"
-    for aln in skipped:
-      if not aln.flag.proper_pair: continue
-      if aln.isize < 0 or aln.isize > result.len: continue
-      result[aln.isize].inc
-
 # This is the bottleneck for run time at the moment
 proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
   repeat_count = 0
@@ -74,6 +47,19 @@ proc get_repeat*(aln:Record, counts:var Seqs[uint8], repeat_count: var int, alig
   var read = ""
   aln.sequence(read)
   align_length = len(read)
+
+  if aln.cigar.len > 0:
+    # we only test the aligned part of the read for repeats.
+    # if it is soft-clipped, those are checked separately anyway.
+    if aln.cigar[0].op == CigarOp.soft_clip:
+      read = read[aln.cigar[0].len..<read.len]
+      align_length -= aln.cigar[0].len
+
+    var L = aln.cigar.len
+    if aln.cigar[L-1].op == CigarOp.soft_clip:
+      read = read[0..<read.len-aln.cigar[L-1].len]
+      align_length -= aln.cigar[L-1].len
+
   result = read.get_repeat(counts, repeat_count, opts)
 
 proc tostring*(t:tread, targets: seq[Target]): string =
@@ -95,7 +81,6 @@ template p_repeat(t:tread): float =
   # proportion repeat
   float(t.repeat_count * t.repeat_length) / t.align_length.float
 
-
 template after_mate(aln:Record): bool {.dirty.} =
   (aln.tid > aln.mate_tid or (aln.tid == aln.mate_tid and ((aln.start > aln.mate_pos) or (aln.start == aln.mate_pos and cache.tbl.hasKey(aln.qname)))))
 
@@ -103,11 +88,6 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
   var repeat_count: int
   var align_length: int
   var rep = aln.get_repeat(counts, repeat_count, align_length, opts)
-  if aln.cigar.len > 0:
-    if aln.cigar[0].op == CigarOp.soft_clip:
-      align_length -= aln.cigar[0].len
-    if aln.cigar[aln.cigar.len-1].op == CigarOp.soft_clip:
-      align_length -= aln.cigar[aln.cigar.len-1].len
   doAssert align_length > 0, aln.tostring
   doAssert repeat_count < 256, aln.tostring
 
@@ -233,8 +213,9 @@ proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
     return true
   if B.p_repeat > opts.proportion_repeat and A.mapping_quality < opts.min_mapq:
     return true
+
   return false
- 
+
 proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
 
