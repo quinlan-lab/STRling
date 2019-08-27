@@ -1,4 +1,5 @@
 import kmer
+import hts/bam
 import math
 import hts/bam
 
@@ -25,12 +26,46 @@ proc complement*(s:char): char {.inline.} =
         return 'A'
     else:
         return s
+
 proc reverse_complement*(xs: string): string =
   result = newString(xs.len)
   for i, x in xs:
     # high == len - 1
     result[xs.high-i] = complement(x)
 
+proc complement*(xs: string): string =
+  result = newString(xs.len)
+  for i, x in xs:
+    # high == len - 1
+    result[i] = complement(x)
+
+
+proc fragment_length_distribution*(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
+  var i = -1
+  var counted:int = 0
+  var skipped = newSeqOfCap[Record](skip_reads)
+  for aln in bam:
+    i += 1
+    if not aln.flag.proper_pair: continue
+    if aln.flag.supplementary or aln.flag.secondary: continue
+    if aln.isize < 0: continue
+    if aln.isize > result.len: continue
+    if i < skip_reads:
+      skipped.add(aln.copy())
+      continue
+    else:
+      skipped.setLen(0)
+    result[aln.isize].inc
+    counted += 1
+    if counted > n_reads: break
+
+  if result.sum == 0:
+    # mostly for debugging and testing on small bams.
+    stderr.write_line "using first reads in fragment_length_distribution calculation as there were not enough"
+    for aln in skipped:
+      if not aln.flag.proper_pair: continue
+      if aln.isize < 0 or aln.isize > result.len: continue
+      result[aln.isize].inc
 
 type Seq*[T] = object
   imax*: int

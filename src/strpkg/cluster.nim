@@ -152,6 +152,14 @@ proc tostring*(c:Cluster, targets: seq[Target]): string =
     rep.add(v)
   return &"{targets[c.reads[0].tid].name}\t{c.reads[0].position}\t{c.reads[c.reads.high].position}\t{c.reads.len}\t{rep}"
 
+proc has_anchor(reads: seq[tread]): bool =
+  # we can get false clusters driven only soft-clips
+  # and we can remove them by noting that there are no
+  # anchoring reads (mates mapping well nearby)
+  for r in reads:
+    if r.split == Soft.none: return true
+  return false
+
 iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   tandems.sort(tread_cmp)
 
@@ -182,12 +190,12 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
 
         # remove stuff (at start of cluster) that's now too far away.
         c.trim(2'u32 * max_dist)
-        if c.reads.len >= min_supporting_reads:
+        if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
           yield c
           c = Cluster()
         # increment i to past last j and break out of this cluster
         break
 
     c.trim(max_dist)
-    if c.reads.len >= min_supporting_reads:
+    if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
       yield c
