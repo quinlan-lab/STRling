@@ -1,5 +1,6 @@
 import kmer
 import math
+import hts/bam
 
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
@@ -93,3 +94,12 @@ proc count*(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
     count.inc(enc)
   if count.imax == -1: return 0
   return count.A[count.imax].int
+
+# Get a tid for a given chromosome name
+proc get_tid*(name:string, targets: seq[Target]): int =
+  for t in targets:
+    if t.name == name:
+      return t.tid
+  return -1
+
+

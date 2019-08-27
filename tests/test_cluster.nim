@@ -2,6 +2,27 @@ import unittest
 include strpkg/cluster
 
 suite "cluster suite":
+
+  test "bounds equal":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 1, right: 100)
+    check a == b
+
+  test "bounds unequal":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 2, right: 100)
+    check not (a == b)
+
+  test "bounds overlap":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 50, right: 100)
+    check a.overlaps(b)
+
+  test "bounds don't overlap":
+    var a = Bounds(tid: 0, left: 1, right: 100)
+    var b = Bounds(tid: 0, left: 200, right: 300)
+    check a.overlaps(b) == false
+
   test "test clustering":
 
     var reads = @[
@@ -93,3 +114,18 @@ suite "cluster suite":
 #    check b.left == 3
 #    check b.right == 3
 
+  test "test parse STR region":
+    var l = "chr1 1 100 CAG"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    var b = parse_bounds(l, targets)
+    check b.tid == 0
+    check b.left == 1
+    check b.right == 100
+    check b.repeat == "CAG"
+
+  test "test parse STR bed file":
+    var f = "test_str_parse.bed"
+    var text = "chr1 1 100 CAG\nchr1 1 100 CAG"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    writeFile(f, text)
+    check parse_loci(f, targets)[1].tid == 0

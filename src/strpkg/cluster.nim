@@ -4,6 +4,8 @@ import strformat
 import tables
 import itertools
 import hts/bam
+import strutils
+import utils
 
 type Soft* {.size:1, pure.} = enum
   left
@@ -54,6 +56,38 @@ type Bounds* = object
   n_right*: uint16
   n_total*: uint16
   repeat*: string
+  name*: string
+
+proc `==`(a,b: Bounds): bool =
+  if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
+    return true
+
+# Check if two Bounds overlap. Assumes left <= right in both Bounds
+proc overlaps*(a,b: Bounds): bool =
+  if a.tid == b.tid and a.repeat == b.repeat:
+    var ileft = max(a.left, b.left) #lower bound of intersection interval
+    var iright = min(a.right, b.right) #upper bound of intersection interval
+    return ileft <= iright #interval non-empty?
+
+# Parse single line of a an STR loci file
+proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
+  var l_split = l.splitWhitespace()
+  if len(l_split) == 4:
+    discard
+  elif len(l_split) == 5:
+    result.name = l_split[4]
+  else:
+    quit fmt"Error reading loci bed file. Expected 4 or 5 fields and got {len(l_split)} on line: {l}"
+  result.tid = int32(get_tid(l_split[0], targets))
+  result.left = uint32(parseInt(l_split[1]))
+  result.right = uint32(parseInt(l_split[2]))
+  result.repeat = l_split[3]
+  doAssert(result.left <= result.right)
+
+# Parse an STR loci bed file
+proc parse_loci*(f:string, targets: seq[Target]): seq[Bounds] =
+  for line in lines f:
+    result.add(parse_bounds(string(line), targets))
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
@@ -98,6 +132,9 @@ proc bounds*(cl:Cluster): Bounds =
   if (result.right == 0) and (result.left > 0'u32):
     result.right = result.left
 
+  # If left is > right... XXX TODO
+  #doAssert(result.left <= result.right)
+
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
@@ -106,7 +143,7 @@ proc trim(cl:var Cluster, max_dist:uint32) =
     cl.reads = cl.reads[1..cl.reads.high]
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
-  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}"
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}\t{b.name}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string
