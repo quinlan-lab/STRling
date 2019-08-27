@@ -112,7 +112,7 @@ proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline
   doAssert repeat_count < 256, aln.tostring
 
   result = tread(tid:aln.tid.int32,
-                 position: aln.start.uint32,
+                 position: max(0, aln.start).uint32,
                  repeat: rep,
                  flag: aln.flag,
                  repeat_count: repeat_count.uint8,
@@ -152,7 +152,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
 
     # If read is soft-clipped on the left take the read position as the start of read
     # If soft-clipped on the right take the read position to the the end of the alignment
-    var position = if cig_index == 0: (aln.start).uint32 else: (aln.stop).uint32
+    var position = if cig_index == 0: max(0, aln.start).uint32 else: max(0, aln.stop).uint32
     cache.cache.add(tread(tid:aln.tid.int32,
                   position: position,
                   flag: aln.flag,
