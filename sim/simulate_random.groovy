@@ -13,13 +13,28 @@ mutate_locus = {
             $PYTHON $TOOLS/random_str_alleles.py
                 --locus "4   3076604 3076695 CAG"
                 --out $output.bed
-                --num 200
+                --num 1
                 --min -5
                 --max 200
                 --fixed 0
                 --seed 7
         """
     }
+}
+
+@transform("bam")
+simulate_str_reads = {
+    doc """ """
+
+    output.dir = "sim"
+
+    exec """
+        /uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/git/str-dev/src/strpkg/simulate_reads
+            --fasta $REF
+            --output $output.prefix
+            /uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/data/STR_true_pos/D09-903.cram
+            $input.bed
+    """
 }
 
 combine = {
@@ -34,10 +49,8 @@ combine = {
 
 run {
         mutate_locus +
-        generate_alleles +
-
-        "%.fasta" * [
-            generate_reads +
-            align_bwa + index_bam + str
+        "%.bed" * [
+            simulate_str_reads +
+            str
         ] + combine
 }
