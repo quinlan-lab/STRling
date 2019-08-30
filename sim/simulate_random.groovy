@@ -8,12 +8,14 @@ mutate_locus = {
     doc """Generate a random heterozygous coding STR loci in the potentially
         pathogenic range."""
 
-    produce('HTT_rand.bed') {
+    output.dir = "sim"
+
+    produce('*.bed') {
         exec """
             $PYTHON $TOOLS/random_str_alleles.py
                 --locus "4   3076604 3076695 CAG"
-                --out $output.bed
-                --num 1
+                --out $dir/
+                --num 200
                 --min -5
                 --max 200
                 --fixed 0
