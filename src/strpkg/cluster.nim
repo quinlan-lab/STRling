@@ -57,6 +57,15 @@ type Bounds* = object
   n_total*: uint16
   repeat*: string
   name*: string
+  left_exact*: bool
+  right_exact*:bool
+
+
+proc start*(b:Bounds): int =
+  return b.left.int
+
+proc stop*(b:Bounds): int =
+  return b.right.int
 
 proc `==`(a,b: Bounds): bool =
   if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
@@ -115,25 +124,33 @@ proc bounds*(cl:Cluster): Bounds =
       posns.add(r.position)
   if posns.len > 0:
     result.center_mass = posns[int(posns.len / 2)]
-  if lefts.len > 0:
+  # require at least 50% of lefts to have the same position.
+  if lefts.len > 0 and lefts.largest.val.float > 0.5 * lefts.len.float:
     var ll = lefts.largest
     result.left = ll.key
+    # only set to exact if most frequent is at least 2. and above, we've also
+    # required to have > 50% of left-splits at this exact location.
+    result.left_exact = ll.val > 1
   else:
     result.left = result.center_mass
-  if rights.len > 0:
+  if rights.len > 0 and rights.largest.val.float > 0.5 * rights.len.float:
     var rr = rights.largest
     result.right = rr.key
+    result.right_exact = rr.val > 1
   else:
     result.right = result.center_mass
 
-  # If one bound is missing, replace it with the other
-  if (result.left == 0) and (result.right > 0'u32):
-    result.left = result.right
-  if (result.right == 0) and (result.left > 0'u32):
-    result.right = result.left
+  # if we have soft clips in left, but not right AND the bounds are
+  # flipped set right == left + 1. (and vice-versa for right <- left)
+  if result.right < result.left:
+    if (not result.right_exact) and result.left_exact:
+      result.right = result.left + 1
+    elif (not result.left_exact) and result.right_exact:
+      result.left = result.right - 1
 
   # If left is > right... XXX TODO
-  #doAssert(result.left <= result.right)
+  if result.left > result.right:
+    echo "ERROR:", $cl.reads
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
@@ -160,12 +177,137 @@ proc has_anchor(reads: seq[tread]): bool =
     if r.split == Soft.none: return true
   return false
 
-iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
+type pair = object
+  left: int
+  right: int
+
+proc fix_overlapping_bounds(strong_pairs: var seq[pair]) =
+  for i in 1..strong_pairs.high:
+    var a = strong_pairs[i - 1]
+    var b = strong_pairs[i]
+    if a.right < b.left: continue
+    var mid = int(0.5 + a.right.float + b.left.float)
+    strong_pairs[i - 1].right = mid
+    var R = strong_pairs[i - 1]
+    if R.right < R.left:
+      strong_pairs[i - 1].left = R.right - 1
+
+    var L = strong_pairs[i]
+    strong_pairs[i].left = mid
+    if L.right < L.left:
+      strong_pairs[i].right = L.left + 1
+
+proc count_lefts_and_rights(tandems: seq[tread]): tuple[lefts: CountTableRef[uint32], rights: CountTableRef[uint32]] =
+  result.lefts = newCountTable[uint32]()
+  result.rights = newCountTable[uint32]()
+  for i in 0..tandems.high:
+    var t = tandems[i]
+    if t.split == Soft.left:
+      result.lefts.inc(t.position)
+    elif t.split == Soft.right:
+      result.rights.inc(t.position)
+
+proc find_strong(sites: CountTableRef[uint32], strong_soft_cutoff:int): seq[uint32] =
+  result = newSeqOfCap[uint32](2048)
+
+  for pos, cnt in sites:
+    if cnt >= strong_soft_cutoff:
+      if result.len > 0 and pos - result[result.high] < 3:
+        continue
+      else:
+        result.add(pos)
+    sort(result)
+
+proc cluster(strong_pairs:var seq[pair], tandems: var seq[tread]): seq[Cluster] =
+  # given bounds, generate clusters
+  for p in strong_pairs:
+    let ilo = tandems.lowerBound(p.left, proc(a: tread, i: int): int =
+      return cmp(a.position.int, p.left)
+    )
+
+    let ihi = tandems.upperBound(p.right, proc(a: tread, i: int): int =
+      return cmp(a.position.int, p.right)
+    )
+    var candidates = tandems[ilo..<ihi]
+    result.add( Cluster(reads:candidates))
+    # TODO: do this more efficiently with memMove
+    tandems = tandems[0..<ilo] & tandems[ihi..tandems.high]
+
+iterator gen_strong_single_side(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int, strong_soft_cutoff:int): Cluster =
+  var (lefts, rights) = tandems.count_lefts_and_rights
+  var strong_lefts = lefts.find_strong(strong_soft_cutoff)
+  var strong_rights = rights.find_strong(strong_soft_cutoff)
+
+  # we call these pairs, but the bounds are derived from just a single side.
+  var pairs = newSeq[pair]()
+  for p in strong_lefts:
+    pairs.add(pair(left: max(0, p.int - max_dist.int), right: p.int + max_dist.int))
+  for p in strong_rights:
+    pairs.add(pair(left: max(0, p.int - max_dist.int), right: p.int + max_dist.int))
+
+  pairs.fix_overlapping_bounds
+  for c in pairs.cluster(tandems):
+    yield c
+
+iterator gen_strong_pairs(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int, strong_soft_cutoff:int): Cluster =
+
+  # count-tables with pos-> count
+  var (lefts, rights) = tandems.count_lefts_and_rights
+
+  # strong_left/rights are seq postion for each position with >=
+  # strong_soft_cutoff
+  var strong_lefts = lefts.find_strong(strong_soft_cutoff)
+  var strong_rights = rights.find_strong(strong_soft_cutoff)
+
+  var strong_pairs = newSeq[pair]()
+
+  for left in strong_lefts:
+    # check if we have a right nearby
+    var right = strong_rights.upperBound(left)
+    # find a right within 100 bases. TODO: make this a(n internal) parameter
+    if right.int - left.int > 100:
+      continue
+
+    strong_pairs.add(pair(left: max(0, left.int - max_dist.int), right: right.int + max_dist.int))
+
+  # adjust so bounds are non-overlapping
+  strong_pairs.fix_overlapping_bounds
+  for c in strong_pairs.cluster(tandems):
+    yield c
+
+iterator cluster_single(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5, strong_soft_cutoff:int=4): Cluster =
+  # tandems are a single repeat unit from a single chromosome.
+  if tandems[0].tid < 0:
+    stderr.write_line "yielding " & $tandems.len & " unplaced reads with repaeat: " & $tandems[0].repeat
+    yield Cluster(reads: tandems)
+    tandems.setLen(0)
+  else:
+    stderr.write_line "total tandems at start:", tandems.len
+    var k = 0
+    var L = tandems.len
+    for c in gen_strong_pairs(tandems, max_dist, min_supporting_reads, strong_soft_cutoff):
+      k += c.reads.len
+      yield c
+    doAssert tandems.len == L - k
+    for c in gen_strong_single_side(tandems, max_dist, min_supporting_reads, strong_soft_cutoff):
+      k += c.reads.len
+      yield c
+    doAssert tandems.len == L - k
+
+    stderr.write_line "total tandems remaining:", tandems.len
+    # TODO: cluster those with no or little split support.
+
+iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5, strong_soft_cutoff:int=4): Cluster =
   tandems.sort(tread_cmp)
 
   for group in groupby(tandems, bytidrep):
     # reps are on same chromosome and have same repeat unit
     var reps: seq[tread] = group.v
+    # first we try clustering based on the split reads.
+    for cluster in reps.cluster_single(max_dist, min_supporting_reads): yield cluster
+
+    # TODO: continue here?
+    #[
 
     if reps[0].tid < 0:
       stderr.write_line "yielding " & $reps.len & " unplaced reads with repaeat: " & $reps[0].repeat
@@ -199,3 +341,4 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
     c.trim(max_dist)
     if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
       yield c
+    ]#

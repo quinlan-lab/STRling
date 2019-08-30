@@ -33,13 +33,6 @@ proc reverse_complement*(xs: string): string =
     # high == len - 1
     result[xs.high-i] = complement(x)
 
-proc complement*(xs: string): string =
-  result = newString(xs.len)
-  for i, x in xs:
-    # high == len - 1
-    result[i] = complement(x)
-
-
 proc fragment_length_distribution*(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
   var i = -1
   var counted:int = 0
@@ -136,5 +129,3 @@ proc get_tid*(name:string, targets: seq[Target]): int =
     if t.name == name:
       return t.tid
   return -1
-
-

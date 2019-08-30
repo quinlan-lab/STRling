@@ -29,3 +29,12 @@ If you get the error:
 try:  
 `export LD_LIBRARY_PATH=./htslib/`
 
+
+## Simulate
+
+```
+nim c -r src/strpkg/simulate_reads.nim --fasta $fasta --output xx $bam sim/disease_loci_sims_minpath.bed
+```
+
+will create xx.bam which can be tested with:
+

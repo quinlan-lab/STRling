@@ -129,3 +129,24 @@ suite "cluster suite":
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
     writeFile(f, text)
     check parse_loci(f, targets)[1].tid == 0
+
+  test "cluster with flipped left right":
+
+    var reads = @[
+       tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 195, split: Soft.right),
+       tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 195, split: Soft.right),
+       tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 200, split: Soft.none),
+       tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 205, split: Soft.left),
+    ]
+    var b = Cluster(reads:reads).bounds
+    echo "bounds to fix:", b
+ 
+  test "that cluster has right bounds":
+    var reads = @[tread(tid: 11'i32, position: 90878497, repeat: ['A', 'A', '\x00', '\x00', '\x00', '\x00'], split: Soft.none),
+                  tread(tid: 11'i32, position: 90878812, repeat: ['A', 'A', '\x00', '\x00', '\x00', '\x00'], split: Soft.none),
+                  tread(tid: 11'i32, position: 90878838, repeat: ['A', 'A', '\x00', '\x00', '\x00', '\x00'], split: Soft.left),
+                  tread(tid: 11'i32, position: 90878838, repeat: ['A', 'A', '\x00', '\x00', '\x00', '\x00'], split: Soft.left),
+                  tread(tid: 11'i32, position: 90878902, repeat: ['A', 'A', '\x00', '\x00', '\x00', '\x00'], split: Soft.none)]
+
+    var b = Cluster(reads:reads).bounds
+    check b.left == b.right - 1
