@@ -207,12 +207,14 @@ proc count_lefts_and_rights(tandems: seq[tread]): tuple[lefts: CountTableRef[uin
     elif t.split == Soft.right:
       result.rights.inc(t.position)
 
-proc find_strong(sites: CountTableRef[uint32], strong_soft_cutoff:int): seq[uint32] =
+proc find_strong(sites: CountTableRef[uint32], strong_soft_cutoff:int, min_dist:uint32=3): seq[uint32] =
+  # find sites with at least strong_soft_cutoff clips at the same position and
+  # require each position to be at least min_dist away from a previous one.
   result = newSeqOfCap[uint32](2048)
 
   for pos, cnt in sites:
     if cnt >= strong_soft_cutoff:
-      if result.len > 0 and pos - result[result.high] < 3:
+      if result.len > 0 and pos - result[result.high] < min_dist:
         continue
       else:
         result.add(pos)
@@ -263,7 +265,7 @@ iterator gen_strong_pairs(tandems: var seq[tread], max_dist:uint32, min_supporti
 
   for left in strong_lefts:
     # check if we have a right nearby
-    var right = strong_rights.upperBound(left)
+    var right = strong_rights[strong_rights.upperBound(left)]
     # find a right within 100 bases. TODO: make this a(n internal) parameter
     if right.int - left.int > 100:
       continue
