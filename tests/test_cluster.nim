@@ -1,5 +1,17 @@
 import unittest
+import sequtils
+import strformat
 include strpkg/cluster
+
+proc `$`(c:Cluster): string =
+  result = "Cluster(reads: @[\n"
+  for i, r in c.reads:
+    result &= &"  tread(position: {r.position}, split: Soft.{r.split})"
+    if i < c.reads.high:
+      result &= ",\n"
+    else:
+      result &= "])\n"
+
 
 suite "cluster suite":
 
@@ -75,7 +87,7 @@ suite "cluster suite":
     var cl = Cluster(reads:reads)
     var b = cl.bounds
     check b.left == 2
-    check b.right == 2
+    check b.right == 3
 
   test "test bounds: no right soft-clipped reads so use median":
     var reads = @[
@@ -88,7 +100,7 @@ suite "cluster suite":
     var cl = Cluster(reads:reads)
     var b = cl.bounds
     check b.left == 1
-    check b.right == 3
+    check b.right == 4
 
   test "test bounds: no left soft-clipped reads so use median":
     var reads = @[
@@ -129,3 +141,45 @@ suite "cluster suite":
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
     writeFile(f, text)
     check parse_loci(f, targets)[1].tid == 0
+
+
+  test "inverted bounds":
+    var tr = @[tread(tid: 20, position: 48086080, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 0),
+              tread(tid: 20, position: 48086101, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 15),
+              tread(tid: 20, position: 48086132, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 0),
+              tread(tid: 20, position: 48086164, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 0),
+              tread(tid: 20, position: 48086187, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 0),
+              tread(tid: 20, position: 48086281, repeat: ['T', 'T', '\x00', '\x00', '\x00', '\x00'], split: Soft.none, mapping_quality: 0)]
+    var b = Cluster(reads:tr).bounds
+    check b.left < b.right
+
+
+
+  test "inverted bounds":
+    var treads = @[
+     tread(position: 233761370, split: Soft.none),
+     tread(position: 233761391, split: Soft.right),
+     tread(position: 233761391, split: Soft.right),
+     tread(position: 233761391, split: Soft.right),
+     tread(position: 233761403, split: Soft.none),
+     tread(position: 233761503, split: Soft.none),
+
+     tread(position: 233761850, split: Soft.left),
+     tread(position: 233761850, split: Soft.left),
+     tread(position: 233761850, split: Soft.left),
+     tread(position: 233761850, split: Soft.left),
+     tread(position: 233761880, split: Soft.none),
+     ]
+
+    var clusters = toSeq(trcluster(treads, 500, 1))
+    check clusters.len == 2
+
+    var c1 = clusters[0]
+    check c1.reads.len == 6
+    check c1.reads[c1.reads.high].position == 233761503
+
+    var c2 = clusters[1]
+    check c2.reads.len == 5
+    check c2.reads[0].position == 233761850
+
+

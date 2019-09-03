@@ -27,6 +27,7 @@ type tread* = object
   align_length*: uint8
   when defined(debug) or defined(qname):
     qname*: string
+
 proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.tid)
   s.pack(x.position)
@@ -64,7 +65,6 @@ proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
   s.unpack(qname)
   when defined(debug) or defined(qname):
     x.qname = qname
-
 
 
 type Cluster* = object
@@ -165,7 +165,7 @@ proc bounds*(cl:Cluster): Bounds =
     var rr = rights.largest
     result.right = rr.key
   else:
-    result.right = result.center_mass
+    result.right = result.center_mass + 1
 
   # If one bound is missing, replace it with the other
   if (result.left == 0) and (result.right > 0'u32):
@@ -174,7 +174,11 @@ proc bounds*(cl:Cluster): Bounds =
     result.right = result.left
 
   # If left is > right... XXX TODO
-  #doAssert(result.left <= result.right)
+  if result.left >= result.right:
+
+    for t in cl.reads:
+      echo &"tread{t}"
+    quit "inverted bounds:"
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
@@ -201,6 +205,38 @@ proc has_anchor(reads: seq[tread]): bool =
     if r.split == Soft.none: return true
   return false
 
+iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int): Cluster =
+  var i = 0
+  var c:Cluster
+  var has_right: bool
+  var has_left:bool
+  while i < reps.len:
+    # start a new cluster
+    var it = reps[i]
+    c = Cluster(reads: @[it])
+    i += 1 # increment i even if we dont enter the loop
+    for j in i..reps.high:
+      # add any tread that's close enough.
+      # we can have reads a fragment0length away from the middle of the event
+      # from either direction. add 150 for max event length
+      if reps[j].position <= c.posmed(mediani) + 1'u32 * max_dist + 100:
+        c.reads.add(reps[j])
+        i = j + 1
+        continue
+
+      # remove stuff (at start of cluster) that's now too far away.
+      c.trim(1'u32 * max_dist + 100)
+      if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
+        yield c
+        c = Cluster()
+      # increment i to past last j and break out of this cluster
+      break
+
+  c.trim(max_dist + 100)
+  if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
+    yield c
+
+
 iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   tandems.sort(tread_cmp)
 
@@ -213,30 +249,6 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
       yield Cluster(reads: reps)
       continue
 
-    var i = 0
-    var c:Cluster
-    while i < reps.len:
-      # start a new cluster
-      var it = reps[i]
-      c = Cluster(reads: @[it])
-      i += 1 # increment i even if we dont enter the loop
-      for j in i..reps.high:
-        # add any tread that's close enough. we use 2 * max_dist because
-        # we can have reads a fragment length away from the middle of the event
-        # from either direction.
-        if reps[j].position <= c.posmed(mediani) + 2'u32 * max_dist:
-          c.reads.add(reps[j])
-          i = j + 1
-          continue
-
-        # remove stuff (at start of cluster) that's now too far away.
-        c.trim(2'u32 * max_dist)
-        if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-          yield c
-          c = Cluster()
-        # increment i to past last j and break out of this cluster
-        break
-
-    c.trim(max_dist)
-    if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
+    for c in trcluster(reps, max_dist, min_supporting_reads):
       yield c
+
