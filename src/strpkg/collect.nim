@@ -51,8 +51,12 @@ proc find_read_position(A: Record, position:int): int =
       r_off += op.len
     if r_off < position: continue
 
+
     var over = r_off - position
     if over > q_off: return -1
+
+    if not cons.query:
+      return -1
 
     return q_off - over
 
@@ -63,18 +67,23 @@ proc count(A: Record, bounds:Bounds): int =
   var dna:string
   A.sequence(dna)
 
-  var read_left = A.find_read_position(bounds.left.int)
-  var read_right = A.find_read_position(bounds.right.int)
-  if read_left < 0: read_left = 0
-  if read_right < 0: read_right = 1
+  let read_left = max(0, A.find_read_position(bounds.left.int))
+  let read_right = max(0, A.find_read_position(bounds.right.int))
+  if read_right > dna.len or read_right < read_left: return 0
 
-  return dna[read_left..read_right].count(bounds.repeat)
+  return dna[read_left..<read_right].count(bounds.repeat)
 
 proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
 
   if A.start < bounds.left.int and A.stop > bounds.right.int:
     # just do a count directly
-    support.SpanningReadRepeatCount = A.count(bounds).uint8
+    try:
+      support.SpanningReadRepeatCount = A.count(bounds).uint8
+    except:
+      echo A.tostring
+      echo A.find_read_position(bounds.left.int)
+      echo A.find_read_position(bounds.right.int)
+      raise getCurrentException()
     when defined(debug) or defined(qname):
       support.qname = A.qname
 

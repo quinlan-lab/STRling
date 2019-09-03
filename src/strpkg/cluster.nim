@@ -6,6 +6,8 @@ import itertools
 import hts/bam
 import strutils
 import utils
+import msgpack4nim
+import msgpack4collection
 
 type Soft* {.size:1, pure.} = enum
   left
@@ -26,8 +28,49 @@ type tread* = object
   when defined(debug) or defined(qname):
     qname*: string
 
+proc pack_type*[ByteStream](s: ByteStream, x: tread) =
+  s.pack(x.tid)
+  s.pack(x.position)
+  s.pack(x.repeat)
+  s.pack(x.flag.uint16)
+  s.pack(x.split.uint8)
+  s.pack(x.mapping_quality)
+  s.pack(x.repeat_count)
+  s.pack(x.align_length)
+  var L:uint32 = 0
+  when defined(debug) or defined(qname):
+    L = x.qname.len.uint32
+    s.pack(L)
+    s.pack(x.qname)
+  else:
+    s.pack(L)
+
+proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
+  s.unpack(x.tid)
+  s.unpack(x.position)
+  s.unpack(x.repeat)
+  var f:uint16
+  s.unpack(f)
+  x.flag = Flag(f)
+  var split:uint8
+  s.unpack(split)
+  x.split = Soft(split)
+  s.unpack(x.mapping_quality)
+  s.unpack(x.repeat_count)
+  s.unpack(x.align_length)
+  var L:uint32 = 0
+  var qname: string
+  s.unpack(L)
+  qname = newString(L)
+  s.unpack(qname)
+  when defined(debug) or defined(qname):
+    x.qname = qname
+
+
 type Cluster* = object
   reads*: seq[tread]
+  left: int
+  right:int
 
 const mediani = 9
 
@@ -61,13 +104,7 @@ type Bounds* = object
   right_exact*:bool
 
 
-proc start*(b:Bounds): int =
-  return b.left.int
-
-proc stop*(b:Bounds): int =
-  return b.right.int
-
-proc `==`(a,b: Bounds): bool =
+proc `==`*(a,b: Bounds): bool =
   if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
     return true
 
@@ -103,6 +140,8 @@ proc bounds*(cl:Cluster): Bounds =
 
   var lefts = initCountTable[uint32](8)
   var rights = initCountTable[uint32](8)
+  result.left = cl.left.uint32
+  result.right = cl.right.uint32
 
   var posns = newSeqOfCap[uint32](cl.reads.len)
   for c in cl.reads[0].repeat:
@@ -148,9 +187,9 @@ proc bounds*(cl:Cluster): Bounds =
     elif (not result.left_exact) and result.right_exact:
       result.left = result.right - 1
 
-  # If left is > right... XXX TODO
   if result.left > result.right:
-    echo "ERROR:", $cl.reads
+    result.left = cl.left.uint32
+    result.right = cl.right.uint32
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
@@ -182,11 +221,14 @@ type pair = object
   right: int
 
 proc fix_overlapping_bounds(strong_pairs: var seq[pair]) =
+  var to_rm: seq[int]
   for i in 1..strong_pairs.high:
     var a = strong_pairs[i - 1]
     var b = strong_pairs[i]
-    if a.right < b.left: continue
-    var mid = int(0.5 + a.right.float + b.left.float)
+    #echo "before:", a, " ", b
+    #doAssert a.left <= b.left, &"{a} should be left of {b} at {i}"
+    if a.right <= b.left: continue
+    var mid = int(0.5 + (a.right.float + b.left.float) / 2.0)
     strong_pairs[i - 1].right = mid
     var R = strong_pairs[i - 1]
     if R.right < R.left:
@@ -196,6 +238,13 @@ proc fix_overlapping_bounds(strong_pairs: var seq[pair]) =
     strong_pairs[i].left = mid
     if L.right < L.left:
       strong_pairs[i].right = L.left + 1
+
+    if strong_pairs[i-1].right > strong_pairs[i].left:
+      to_rm.add(i-1)
+      strong_pairs[i] = b
+
+  for i in to_rm.reversed:
+    strong_pairs.delete(i)
 
 proc count_lefts_and_rights(tandems: seq[tread]): tuple[lefts: CountTableRef[uint32], rights: CountTableRef[uint32]] =
   result.lefts = newCountTable[uint32]()
@@ -218,24 +267,34 @@ proc find_strong(sites: CountTableRef[uint32], strong_soft_cutoff:int, min_dist:
         continue
       else:
         result.add(pos)
-    sort(result)
+  sort(result)
 
 proc cluster(strong_pairs:var seq[pair], tandems: var seq[tread]): seq[Cluster] =
   # given bounds, generate clusters
   for p in strong_pairs:
-    let ilo = tandems.lowerBound(p.left, proc(a: tread, i: int): int =
+    if tandems.len == 0: return
+    var ilo = tandems.lowerBound(p.left, proc(a: tread, i: int): int =
       return cmp(a.position.int, p.left)
     )
+    if ilo < 0: ilo = 0
 
-    let ihi = tandems.upperBound(p.right, proc(a: tread, i: int): int =
+    var ihi = tandems.upperBound(p.right, proc(a: tread, i: int): int =
       return cmp(a.position.int, p.right)
     )
-    var candidates = tandems[ilo..<ihi]
-    result.add( Cluster(reads:candidates))
-    # TODO: do this more efficiently with memMove
-    tandems = tandems[0..<ilo] & tandems[ihi..tandems.high]
+    if ihi < 0: ihi = 0 #tandems.len
+    try:
+      var candidates = tandems[ilo..<ihi]
+      result.add(Cluster(reads:candidates, left: p.left, right: p.right))
+      tandems = tandems[0..<ilo] & tandems[ihi..tandems.high]
+    except:
+      echo &"ERROR with pair: {p}"
+      echo &"ilo:{ilo} ihi:{ihi}"
+      raise getCurrentException()
 
 iterator gen_strong_single_side(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int, strong_soft_cutoff:int): Cluster =
+  var x = tandems[0].tid
+  for t in tandems:
+    doAssert t.tid == x
   var (lefts, rights) = tandems.count_lefts_and_rights
   var strong_lefts = lefts.find_strong(strong_soft_cutoff)
   var strong_rights = rights.find_strong(strong_soft_cutoff)
@@ -246,7 +305,10 @@ iterator gen_strong_single_side(tandems: var seq[tread], max_dist:uint32, min_su
     pairs.add(pair(left: max(0, p.int - max_dist.int), right: p.int + max_dist.int))
   for p in strong_rights:
     pairs.add(pair(left: max(0, p.int - max_dist.int), right: p.int + max_dist.int))
-
+  pairs.sort do (a, b: pair) -> int:
+    result = cmp(a.left.int, b.left.int)
+    if result == 0:
+      result = cmp(a.right.int, b.right.int)
   pairs.fix_overlapping_bounds
   for c in pairs.cluster(tandems):
     yield c
@@ -262,18 +324,27 @@ iterator gen_strong_pairs(tandems: var seq[tread], max_dist:uint32, min_supporti
   var strong_rights = rights.find_strong(strong_soft_cutoff)
 
   var strong_pairs = newSeq[pair]()
+  if strong_rights.len > 0:
 
-  for left in strong_lefts:
-    # check if we have a right nearby
-    var right = strong_rights[strong_rights.upperBound(left)]
-    # find a right within 100 bases. TODO: make this a(n internal) parameter
-    if right.int - left.int > 100:
-      continue
+    for left in strong_lefts:
+      # check if we have a right nearby
+      var right = strong_rights[min(strong_rights.high, strong_rights.upperBound(left))]
+      # find a right within 100 bases. TODO: make this a(n internal) parameter
+      if right.int - left.int > 100:
+        continue
 
-    strong_pairs.add(pair(left: max(0, left.int - max_dist.int), right: right.int + max_dist.int))
+      if left > right:
+        #echo &"ERROR: left:{left} > right:{right} . upperBounds was: {strong_rights.upperBound(left)}"
+        continue
 
-  # adjust so bounds are non-overlapping
+      strong_pairs.add(pair(left: max(0, left.int - max_dist.int), right: right.int + max_dist.int))
+
+    # adjust so bounds are non-overlapping
+  for p in strong_pairs:
+    doAssert p.left < p.right, $p
   strong_pairs.fix_overlapping_bounds
+  for p in strong_pairs:
+    doAssert p.left < p.right, $p
   for c in strong_pairs.cluster(tandems):
     yield c
 
@@ -284,7 +355,6 @@ iterator cluster_single(tandems: var seq[tread], max_dist:uint32, min_supporting
     yield Cluster(reads: tandems)
     tandems.setLen(0)
   else:
-    stderr.write_line "total tandems at start:", tandems.len
     var k = 0
     var L = tandems.len
     for c in gen_strong_pairs(tandems, max_dist, min_supporting_reads, strong_soft_cutoff):
@@ -296,7 +366,6 @@ iterator cluster_single(tandems: var seq[tread], max_dist:uint32, min_supporting
       yield c
     doAssert tandems.len == L - k
 
-    stderr.write_line "total tandems remaining:", tandems.len
     # TODO: cluster those with no or little split support.
 
 iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5, strong_soft_cutoff:int=4): Cluster =

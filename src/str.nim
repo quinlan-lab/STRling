@@ -1,4 +1,6 @@
 import kmer
+import streams
+import msgpack4nim
 import algorithm
 import strutils
 import times
@@ -45,6 +47,10 @@ proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int
 proc get_repeat*(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
   # returns blank array if nothing passes.
   var read = ""
+  if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match: 
+    align_length = aln.cigar[0].len
+    return
+
   aln.sequence(read)
   align_length = len(read)
 
@@ -259,6 +265,7 @@ proc tostring*(a:array[6, char]): string =
     if c == 0.char: return
     result.add(c)
 
+
 when isMainModule:
   import math
 
@@ -348,28 +355,49 @@ when isMainModule:
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
                       min_support: min_support, min_mapq: min_mapq)
 
-  var nreads = 0
-  var counts = init[uint8]()
-  stderr.write_line "collecting str-like reads"
-  for aln in ibam: #.query("14:92537254-92537477"):
-    if aln.flag.secondary or aln.flag.supplementary: continue
+  if not fileExists(args.output_prefix & "-treads.bin"):
+    var nreads = 0
+    var counts = init[uint8]()
+    stderr.write_line "collecting str-like reads"
+    for aln in ibam: #.query("14:92537254-92537477"):
+      if aln.flag.secondary or aln.flag.supplementary: continue
 
-    nreads.inc
+      nreads.inc
 
-    if nreads mod 10_000_000 == 0:
-      var nrps = nreads.float64 / (cpuTime() - t0)
-      if args.verbose:
-        stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
+      if nreads mod 10_000_000 == 0:
+        var nrps = nreads.float64 / (cpuTime() - t0)
+        if args.verbose:
+          stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
 
-    cache.add(aln, counts, opts)
+      cache.add(aln, counts, opts)
 
-  # get unmapped reads
-  for aln in ibam.query("*"):
-    if aln.flag.secondary or aln.flag.supplementary: continue
-    nreads.inc
-    cache.add(aln, counts, opts)
+    # get unmapped reads
+    for aln in ibam.query("*"):
+      if aln.flag.secondary or aln.flag.supplementary: continue
+      nreads.inc
+      cache.add(aln, counts, opts)
 
-  stderr.write_line "[str] done reading bam, starting clustering"
+    stderr.write_line "[str] done reading bam, starting clustering"
+
+    var fs = newFileStream(args.output_prefix & "-treads.bin", fmWrite)
+    if fs == nil:
+      quit "couldnt open binary output file"
+
+    for c in cache.cache:
+      fs.pack(c)
+
+    fs.close
+
+  else:
+
+    var fs = newFileStream(args.output_prefix & "-treads.bin", fmRead)
+    while not fs.atEnd:
+      var t:tread
+      fs.unpack(t)
+      cache.cache.add(t)
+    stderr.write_line &"[str] read {cache.cache.len} treads from bin file"
+    #cache.cache.unpack(fs)
+
 
   ### discovery
   var
@@ -405,6 +433,7 @@ when isMainModule:
 
     # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
     for i, locus in loci:
+      # TODO: use an interval tree here instead.
       if b.overlaps(locus):
         b.name = locus.name
         b.left = locus.left
