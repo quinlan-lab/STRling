@@ -155,20 +155,20 @@ suite "cluster suite":
 
 
 
-  test "inverted bounds":
+  test "should split cluster":
     var treads = @[
-     tread(position: 233761370, split: Soft.none),
-     tread(position: 233761391, split: Soft.right),
-     tread(position: 233761391, split: Soft.right),
-     tread(position: 233761391, split: Soft.right),
-     tread(position: 233761403, split: Soft.none),
-     tread(position: 233761503, split: Soft.none),
+     tread(position: 370, split: Soft.none),
+     tread(position: 391, split: Soft.right),
+     tread(position: 391, split: Soft.right),
+     tread(position: 391, split: Soft.right),
+     tread(position: 403, split: Soft.none),
+     tread(position: 503, split: Soft.none),
 
-     tread(position: 233761850, split: Soft.left),
-     tread(position: 233761850, split: Soft.left),
-     tread(position: 233761850, split: Soft.left),
-     tread(position: 233761850, split: Soft.left),
-     tread(position: 233761880, split: Soft.none),
+     tread(position: 850, split: Soft.left),
+     tread(position: 850, split: Soft.left),
+     tread(position: 850, split: Soft.left),
+     tread(position: 850, split: Soft.left),
+     tread(position: 880, split: Soft.none),
      ]
 
     var clusters = toSeq(trcluster(treads, 500, 1))
@@ -176,10 +176,10 @@ suite "cluster suite":
 
     var c1 = clusters[0]
     check c1.reads.len == 6
-    check c1.reads[c1.reads.high].position == 233761503
+    check c1.reads[c1.reads.high].position == 503
 
     var c2 = clusters[1]
     check c2.reads.len == 5
-    check c2.reads[0].position == 233761850
+    check c2.reads[0].position == 850
 
 
