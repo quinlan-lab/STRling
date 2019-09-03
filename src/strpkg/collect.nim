@@ -63,12 +63,10 @@ proc count(A: Record, bounds:Bounds): int =
   var dna:string
   A.sequence(dna)
 
-  var read_left = A.find_read_position(bounds.left.int)
-  var read_right = A.find_read_position(bounds.right.int)
-  if read_left < 0: read_left = 0
-  if read_right < 0: read_right = 1
+  var read_left = max(0, A.find_read_position(bounds.left.int))
+  var read_right = max(1, A.find_read_position(bounds.right.int))
 
-  return dna[read_left..read_right].count(bounds.repeat)
+  return dna[read_left..<read_right].count(bounds.repeat)
 
 proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
 

@@ -1,5 +1,6 @@
 import kmer
 import algorithm
+import msgpack4nim
 import strutils
 import times
 import random
@@ -43,7 +44,13 @@ proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int
       break
 
 proc get_repeat*(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
-  # returns blank array if nothing passes.
+  when defined(skipFullMatch):
+    # TODO: write the code to make find repetitive regions in fasta and use
+    # that with this as default.
+    # compile with -d:skipFullMatch to make it much faster
+    if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match:
+      align_length = aln.cigar[0].len
+      return
   var read = ""
   aln.sequence(read)
   align_length = len(read)
@@ -294,6 +301,7 @@ when isMainModule:
     option("-f", "--fasta", help="path to fasta file")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
+    option("-b", "--bin", help="optional bin file previously created by this tool. re-using this speeds processing dramatically")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
     option("--skip", "Skip this many reads before calculating the insert size distribution", default="100000")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
@@ -347,29 +355,45 @@ when isMainModule:
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
                       min_support: min_support, min_mapq: min_mapq)
-
   var nreads = 0
-  var counts = init[uint8]()
-  stderr.write_line "collecting str-like reads"
-  for aln in ibam: #.query("14:92537254-92537477"):
-    if aln.flag.secondary or aln.flag.supplementary: continue
 
-    nreads.inc
+  if args.bin == "":
 
-    if nreads mod 10_000_000 == 0:
-      var nrps = nreads.float64 / (cpuTime() - t0)
-      if args.verbose:
-        stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
+    var counts = init[uint8]()
+    stderr.write_line "collecting str-like reads"
+    for aln in ibam: #.query("14:92537254-92537477"):
+      if aln.flag.secondary or aln.flag.supplementary: continue
 
-    cache.add(aln, counts, opts)
+      nreads.inc
 
-  # get unmapped reads
-  for aln in ibam.query("*"):
-    if aln.flag.secondary or aln.flag.supplementary: continue
-    nreads.inc
-    cache.add(aln, counts, opts)
+      if nreads mod 10_000_000 == 0:
+        var nrps = nreads.float64 / (cpuTime() - t0)
+        if args.verbose:
+          stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
 
-  stderr.write_line "[str] done reading bam, starting clustering"
+      cache.add(aln, counts, opts)
+
+    # get unmapped reads
+    for aln in ibam.query("*"):
+      if aln.flag.secondary or aln.flag.supplementary: continue
+      nreads.inc
+      cache.add(aln, counts, opts)
+
+    stderr.write_line "[str] done reading bam, starting clustering"
+
+    var fs = newFileStream(args.output_prefix & "-treads.bin", fmWrite)
+    if fs == nil:
+      quit "[str] couldnt open binary output file"
+    for c in cache.cache:
+      fs.pack(c)
+    fs.close
+  else:
+    var fs = newFileStream(args.bin, fmRead)
+    while not fs.atEnd:
+      var t:tread
+      fs.unpack(t)
+      cache.cache.add(t)
+    stderr.write_line &"[str] read {cache.cache.len} treads from bin file"
 
   ### discovery
   var
