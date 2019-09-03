@@ -1,4 +1,6 @@
 import algorithm
+import msgpack4nim
+import msgpack4collection
 import math
 import strformat
 import tables
@@ -25,6 +27,45 @@ type tread* = object
   align_length*: uint8
   when defined(debug) or defined(qname):
     qname*: string
+proc pack_type*[ByteStream](s: ByteStream, x: tread) =
+  s.pack(x.tid)
+  s.pack(x.position)
+  s.pack(x.repeat)
+  s.pack(x.flag.uint16)
+  s.pack(x.split.uint8)
+  s.pack(x.mapping_quality)
+  s.pack(x.repeat_count)
+  s.pack(x.align_length)
+  var L:uint32 = 0
+  when defined(debug) or defined(qname):
+    L = x.qname.len.uint32
+    s.pack(L)
+    s.pack(x.qname)
+  else:
+    s.pack(L)
+
+proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
+  s.unpack(x.tid)
+  s.unpack(x.position)
+  s.unpack(x.repeat)
+  var f:uint16
+  s.unpack(f)
+  x.flag = Flag(f)
+  var split:uint8
+  s.unpack(split)
+  x.split = Soft(split)
+  s.unpack(x.mapping_quality)
+  s.unpack(x.repeat_count)
+  s.unpack(x.align_length)
+  var L:uint32 = 0
+  var qname: string
+  s.unpack(L)
+  qname = newString(L)
+  s.unpack(qname)
+  when defined(debug) or defined(qname):
+    x.qname = qname
+
+
 
 type Cluster* = object
   reads*: seq[tread]
