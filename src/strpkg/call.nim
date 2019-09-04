@@ -29,7 +29,11 @@ proc call_main*() =
     arg("bin", help="bin file previously created by `str extract`")
 
   var argv = commandLineParams()
+  if len(argv) > 0 and argv[0] == "call":
+    argv = argv[1..argv.high]
+
   if len(argv) == 0: argv = @["-h"]
+
   var args = p.parse(argv)
   if args.help:
     quit 0

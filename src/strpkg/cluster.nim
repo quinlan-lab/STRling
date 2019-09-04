@@ -62,7 +62,8 @@ proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
   var qname: string
   s.unpack(L)
   qname = newString(L)
-  s.unpack(qname)
+  if L > 0'u32:
+    s.unpack(qname)
   when defined(debug) or defined(qname):
     x.qname = qname
 
@@ -176,9 +177,10 @@ proc bounds*(cl:Cluster): Bounds =
   # If left is > right... XXX TODO
   if result.left >= result.right:
 
+    stderr.write_line "inverted bounds:"
     for t in cl.reads:
-      echo &"tread{t}"
-    quit "inverted bounds:"
+      stderr.write_line &"  tread{t}"
+    stderr.write_line "##"
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return

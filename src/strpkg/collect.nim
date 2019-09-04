@@ -54,6 +54,9 @@ proc find_read_position(A: Record, position:int): int =
     var over = r_off - position
     if over > q_off: return -1
 
+    if not cons.query:
+      return -1
+
     return q_off - over
 
 
@@ -61,10 +64,17 @@ proc count(A: Record, bounds:Bounds): int =
   ## given a read, count the repeat units in that read that are in the
   ## reference offset provided in bounds.
   var dna:string
+  if bounds.right < bounds.left: return 0
   A.sequence(dna)
 
-  var read_left = max(0, A.find_read_position(bounds.left.int))
-  var read_right = max(1, A.find_read_position(bounds.right.int))
+  var read_left = A.find_read_position(bounds.left.int)
+  var read_right = A.find_read_position(bounds.right.int)
+  if read_left >= 0 and read_right < 0:
+    read_right = dna.len
+  if read_left < 0 and read_right < 0:
+    return 0
+
+  if read_left < 0: read_left = 0
 
   return dna[read_left..<read_right].count(bounds.repeat)
 
