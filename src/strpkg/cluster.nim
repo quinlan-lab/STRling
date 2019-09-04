@@ -218,14 +218,14 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for j in i..reps.high:
       # add any tread that's close enough.
       # we can have reads a fragment0length away from the middle of the event
-      # from either direction. add 150 for max event length
-      if reps[j].position <= c.posmed(mediani) + 1'u32 * max_dist + 100:
+      # from either direction. add 100 for max event length
+      if reps[j].position <= c.posmed(mediani) + max_dist + 100:
         c.reads.add(reps[j])
         i = j + 1
         continue
 
       # remove stuff (at start of cluster) that's now too far away.
-      c.trim(1'u32 * max_dist + 100)
+      c.trim(max_dist + 100)
       if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
         yield c
         c = Cluster()
