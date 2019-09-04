@@ -18,7 +18,20 @@ Compile in fast mode (danger) with read names reported:
 `nim c -d:danger -d:qname src/str.nim`
 
 ## Run
-`./str`
+
+#### extract informative pairs to a binary format
+```
+name=hg002
+str extract -v -f $reference_fasta /path/to/$name.cram $name.bin
+```
+
+#### call strs on the extract binary data
+
+```
+mkdir -p str-results/
+str call --output-prefix str-results/$name -f $reference_fasta /path/to/$name.cram $name.bin
+```
+
 
 ## Run tests
 `nimble tests`

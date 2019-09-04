@@ -2,6 +2,8 @@ import unittest
 import tables
 import str
 import strpkg/utils
+import strpkg/extract
+import strpkg/call
 import hts/bam
 
 suite "str suite":
