@@ -20,9 +20,12 @@ proc main*() =
     stderr.write_line "\nCommands: "
     for k, v in dispatcher:
       echo &"  {k:<13}:   {v.description}"
-    if len(args) > 0 and (args[0] notin dispatcher) and args[0] notin @["-h", "-help"]:
-      echo &"unknown program '{args[0]}'"
-    quit ""
+    if len(args) > 0 and (args[0] notin dispatcher):
+      if args[0] in @["-h", "--help"]:
+        quit(0)
+      else:
+        echo &"unknown program '{args[0]}'"
+    quit &"ERROR: please enter a valid command"
 
   dispatcher[args[0]].f()
 
