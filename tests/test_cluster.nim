@@ -92,6 +92,7 @@ suite "cluster suite":
   test "test bounds: no right soft-clipped reads so use median":
     var reads = @[
       tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 1, split: Soft.left),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 1, split: Soft.left),
       tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 2, split: Soft.none),
       tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 3, split: Soft.none),
       tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 5, split: Soft.none),
@@ -100,7 +101,7 @@ suite "cluster suite":
     var cl = Cluster(reads:reads)
     var b = cl.bounds
     check b.left == 1
-    check b.right == 4
+    check b.right == 2
 
   test "test bounds: no left soft-clipped reads so use median":
     var reads = @[
@@ -186,3 +187,25 @@ suite "cluster suite":
     check c2.reads[0].position == 850
 
 
+  test "inverted bounds again":
+
+    var tr = @[
+      tread(tid: 11, position: 115977335, split: Soft.none),
+      tread(tid: 11, position: 115977397, split: Soft.none),
+      tread(tid: 11, position: 115977419, split: Soft.none),
+      tread(tid: 11, position: 115977448, split: Soft.left),
+      tread(tid: 11, position: 115977585, split: Soft.none),
+      tread(tid: 11, position: 115977598, split: Soft.none)]
+
+    var b = Cluster(reads: tr).bounds
+    check b.left < b.right
+
+  test "inverted bounds 3":
+    var tr = @[
+       tread(tid: 10, position: 92611809, split: Soft.none),
+       tread(tid: 10, position: 92611833, split: Soft.right),
+       tread(tid: 10, position: 92611833, split: Soft.right),
+       tread(tid: 10, position: 92611921, split: Soft.none),
+       tread(tid: 10, position: 92611939, split: Soft.none)]
+    var b = Cluster(reads: tr).bounds
+    check b.left < b.right
