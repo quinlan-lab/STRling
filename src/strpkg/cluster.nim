@@ -207,11 +207,46 @@ proc has_anchor(reads: seq[tread]): bool =
     if r.split == Soft.none: return true
   return false
 
+iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
+  ## results for splitting
+  ## 1. given a group of rights with min_supporting reads that is also the
+  ## largest peak of rights in the current cluster *and* there is a peak
+  ## of lefts that follows, we split between them to make 2 clusters.
+  var should_split = false
+  var lefts = initCountTable[uint32](8)
+  var rights = initCountTable[uint32](8)
+  for r in c.reads:
+    if r.split == Soft.left: lefts.inc(r.position)
+    elif r.split == Soft.right: rights.inc(r.position)
+
+  if rights.len == 0 or lefts.len == 0:
+    yield c
+
+  else:
+
+    var rl = rights.largest
+    var ll = lefts.largest
+    # NOTE this currently looks only at the largest.
+    if rl.key < ll.key and rl.val > min_supporting_reads and ll.val > min_supporting_reads and ll.val.float / lefts.len.float > 0.5 and rl.val.float / rights.len.float > 0.5:
+      var mid = uint32(0.5 + (rl.key.float + ll.key.float) / 2.0)
+      var c1 = Cluster()
+      var c2 = Cluster()
+      for r in c.reads:
+        if r.position < mid:
+          c1.reads.add(r)
+        else:
+          c2.reads.add(r)
+
+      yield c1
+      yield c2
+
+    else:
+      yield c
+
+
 iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int): Cluster =
   var i = 0
   var c:Cluster
-  var has_right: bool
-  var has_left:bool
   while i < reps.len:
     # start a new cluster
     var it = reps[i]
@@ -229,14 +264,14 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
       # remove stuff (at start of cluster) that's now too far away.
       c.trim(max_dist + 100)
       if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-        yield c
+        for sc in c.split_cluster(min_supporting_reads): yield sc
         c = Cluster()
       # increment i to past last j and break out of this cluster
       break
 
   c.trim(max_dist + 100)
   if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-    yield c
+    for sc in c.split_cluster(min_supporting_reads): yield sc
 
 
 iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =

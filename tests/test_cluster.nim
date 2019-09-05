@@ -171,9 +171,10 @@ suite "cluster suite":
      tread(position: 880, split: Soft.none),
      ]
 
-    #[
 
-    var clusters = toSeq(trcluster(treads, 500, 1))
+    var clusters : seq[Cluster]
+    for c in trcluster(treads, 500, 1):
+      clusters.add(c)
     check clusters.len == 2
 
     var c1 = clusters[0]
@@ -183,6 +184,5 @@ suite "cluster suite":
     var c2 = clusters[1]
     check c2.reads.len == 5
     check c2.reads[0].position == 850
-    ]#
 
 
