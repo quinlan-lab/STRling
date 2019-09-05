@@ -120,8 +120,6 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      # but deleting from a table is not cheap so current trade-off memory for speed.
      # should instead add a reduced object with chrom, sequence, cigar
      pairs.mgetOrPut(aln.qname, @[]).add(aln.copy())
-     if pairs.len == 5_000:
-       stderr.write_line "large pairs seq in spanners() for " & $bounds
 
   if pairs.len > 5_000:
     stderr.write_line "large pairs seq in spanners() for " & $bounds & " got " & $pairs.len & " pairs"
