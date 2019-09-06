@@ -1,5 +1,6 @@
 import kmer
 import algorithm
+import ./genome_strs
 import msgpack4nim
 import strutils
 import times
@@ -15,42 +16,21 @@ import strformat
 import math
 import argparse
 
-# This is the bottleneck for run time at the moment
-proc get_repeat(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
-  repeat_count = 0
-  if read.count('N') > 20: return
-  var s = newString(6)
-
-  var best_score: int = -1
-  for k in 2..6:
-    let count = read.count(k, counts[k])
-    var score = count * k
-    if score <= best_score:
-      if count < (read.len.float * 0.12 / k.float).int:
-        break
-      continue
-    best_score = score
-    if count > (read.len.float * opts.proportion_repeat / k.float).int:
-      # now check the actual string because the kmer method can't track phase
-      s = newString(k)
-      counts[k].argmax.decode(s)
-      if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
-        copyMem(result.addr, s[0].addr, k)
-        repeat_count = count
-    elif count < (read.len.float * 0.12 / k.float).int:
-      # e.g. for a 5 mer repeat, we should see some 2, 3, 4 mer reps and we can
-      # bail if we do not. this is an optimization to avoid counting when we
-      # cant possibly see a repeat.
-      break
-
-proc get_repeat*(aln:Record, counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
+proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
   when defined(skipFullMatch):
-    # TODO: write the code to make find repetitive regions in fasta and use
-    # that with this as default.
     # compile with -d:skipFullMatch to make it much faster
     if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match:
       align_length = aln.cigar[0].len
       return
+
+  # don't check for strs when we know there's not repeat in the reference *and*
+  # we have an exact match to the reference.
+  if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match and aln.chrom in genome_str:
+    var empty: seq[region]
+    if not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
+      align_length = aln.cigar[0].len
+      return
+
   var read = ""
   aln.sequence(read)
   align_length = len(read)
@@ -91,10 +71,10 @@ template p_repeat(t:tread): float =
 template after_mate(aln:Record): bool {.dirty.} =
   (aln.tid > aln.mate_tid or (aln.tid == aln.mate_tid and ((aln.start > aln.mate_pos) or (aln.start == aln.mate_pos and cache.tbl.hasKey(aln.qname)))))
 
-proc to_tread(aln:Record, counts: var Seqs[uint8], opts:Options): tread {.inline.} =
+proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: var Seqs[uint8], opts:Options): tread {.inline.} =
   var repeat_count: int
   var align_length: int
-  var rep = aln.get_repeat(counts, repeat_count, align_length, opts)
+  var rep = aln.get_repeat(genome_str, counts, repeat_count, align_length, opts)
   doAssert align_length > 0, aln.tostring
   doAssert repeat_count < 256, aln.tostring
 
@@ -223,7 +203,7 @@ proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
 
   return false
 
-proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
+proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]], counts: var Seqs[uint8], opts:Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
 
   # Check if you have both reads
@@ -234,7 +214,7 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
     # get mates together and see what, if anything should be added to the final
     # cache.
 
-    var self = aln.to_tread(counts, opts)
+    var self = aln.to_tread(genome_str, counts, opts)
     cache.add_soft(aln, counts, opts, self.repeat)
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
 
@@ -256,19 +236,15 @@ proc add(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Options) =
       cache.cache.add(self)
 
   else:
-    var tr = aln.to_tread(counts, opts)
+    var tr = aln.to_tread(genome_str, counts, opts)
     cache.add_soft(aln, counts, opts, tr.repeat)
     doAssert not cache.tbl.hasKeyOrPut(aln.qname, tr), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
-
-proc tostring*(a:array[6, char]): string =
-  for c in a:
-    if c == 0.char: return
-    result.add(c)
 
 proc extract_main*() =
   # Parse args/options
   var p = newParser("str extract"):
     option("-f", "--fasta", help="path to fasta file (required for CRAM)")
+    option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
@@ -285,7 +261,6 @@ proc extract_main*() =
   if args.help:
     quit 0
 
-  var t0 = cpuTime()
   var ibam:Bam
   var proportion_repeat = parseFloat(args.proportion_repeat)
   var min_support = parseInt(args.min_support)
@@ -320,7 +295,9 @@ proc extract_main*() =
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
                       min_support: min_support, min_mapq: min_mapq)
   var nreads = 0
+  var genome_str = genome_repeats(args.fasta, opts, args.genome_repeats)
 
+  var t0 = cpuTime()
   var counts = init[uint8]()
   stderr.write_line "collecting str-like reads"
   for aln in ibam: #.query("14:92537254-92537477"):
@@ -333,13 +310,13 @@ proc extract_main*() =
       if args.verbose:
         stderr.write_line $nreads, &" @ {aln.chrom}:{aln.start} {nrps:.1f} reads/sec tbl len: {cache.tbl.len} cache len: {cache.cache.len}"
 
-    cache.add(aln, counts, opts)
+    cache.add(aln, genome_str, counts, opts)
 
   # get unmapped reads
   for aln in ibam.query("*"):
     if aln.flag.secondary or aln.flag.supplementary: continue
     nreads.inc
-    cache.add(aln, counts, opts)
+    cache.add(aln, genome_str, counts, opts)
 
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
