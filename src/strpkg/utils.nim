@@ -1,8 +1,10 @@
 import kmer
+import strutils
 import hts/bam
 import math
 import hts/bam
 
+{.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
   var base: char
@@ -14,6 +16,7 @@ iterator slide_by*(s:string, k: int): uint64 {.inline.} =
       f.forward_add(base, k)
       kmin = min(kmin, f)
     yield kmin
+{.pop.}
 
 proc complement*(s:char): char {.inline.} =
     if s == 'C':
@@ -137,4 +140,37 @@ proc get_tid*(name:string, targets: seq[Target]): int =
       return t.tid
   return -1
 
+# This is the bottleneck for run time at the moment
+proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
+  repeat_count = 0
+  if read.count('N') > 20: return
+  var s = newString(6)
+
+  var best_score: int = -1
+  for k in 2..6:
+    let count = read.count(k, counts[k])
+    var score = count * k
+    if score <= best_score:
+      if count < (read.len.float * 0.12 / k.float).int:
+        break
+      continue
+    best_score = score
+    if count > (read.len.float * opts.proportion_repeat / k.float).int:
+      # now check the actual string because the kmer method can't track phase
+      s = newString(k)
+      counts[k].argmax.decode(s)
+      if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
+        copyMem(result.addr, s[0].addr, k)
+        repeat_count = count
+    elif count < (read.len.float * 0.12 / k.float).int:
+      # e.g. for a 5 mer repeat, we should see some 2, 3, 4 mer reps and we can
+      # bail if we do not. this is an optimization to avoid counting when we
+      # cant possibly see a repeat.
+      break
+
+
+proc tostring*(a:array[6, char]): string =
+  for c in a:
+    if c == 0.char: return
+    result.add(c)
 

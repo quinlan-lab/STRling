@@ -8,7 +8,7 @@ license       = "MIT"
 
 # Dependencies
 
-requires "nim >= 0.18.0", "kmer", "hts", "itertools", "argparse", "msgpack4nim"
+requires "nim >= 0.18.0", "kmer >= 0.2.2", "hts", "itertools", "argparse", "msgpack4nim", "lapper"
 bin = @["str"]
 
 srcDir = "src"
