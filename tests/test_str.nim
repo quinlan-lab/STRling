@@ -60,7 +60,7 @@ suite "str suite":
     var repeat_count = 0
     var align_length = 0
 
-    var rep = a.get_repeat(counts, repeat_count, align_length, opts)
+    var rep = a.get_repeat(nil, counts, repeat_count, align_length, opts)
     check rep == ['A', 'A', '\x00', '\x00', '\x00', '\x00']
 
 
