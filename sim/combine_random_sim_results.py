@@ -46,14 +46,10 @@ def parse_gt(all_files):
     return(all_df)
 
 def parse_bounds(all_files):
-    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,estimate'
+    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,depth'
     all_df_bounds = []
     for f in all_files:
         df = pd.read_csv(f, sep='\t', names=header.split(','))
-        try:
-            df['estimate'] = df.estimate.str.split(':',expand=True,).iloc[:,1]
-        except IndexError:
-            pass
         df['sim'] = get_sim_str(f)
         all_df_bounds.append(df)
     all_df = pd.concat(all_df_bounds)

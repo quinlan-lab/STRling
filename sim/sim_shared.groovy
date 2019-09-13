@@ -111,10 +111,12 @@ str_extract = {
     output.dir = "str"
 
     def bamname = get_fname(input.bam)
-
+    def str_ref = get_fname(REF) + ".str"
     produce(bamname.prefix + ".str.bin") {
         exec """
             $STR_NIM extract
+                -f $REF
+                -g $str_ref
                 -p 0.8
                 -v
                 $input.bam
