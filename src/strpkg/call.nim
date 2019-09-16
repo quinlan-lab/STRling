@@ -125,9 +125,9 @@ proc call_main*() =
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
-    var spans = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+    var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line b.tostring(targets) & "\testimate:" & $estimate
+    bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
     for s in spans:
       span_fh.write_line s.tostring(b, targets[b.tid].name)
     for s in c.reads:
@@ -139,9 +139,9 @@ proc call_main*() =
     if locus.right - locus.left > 1000'u32:
       stderr.write_line "large bounds:" & $locus & " skipping"
       continue
-    var spans = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
+    var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
     var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line locus.tostring(targets) & "\testimate:" & $estimate
+    bounds_fh.write_line locus.tostring(targets) & "\t" & $median_depth
     for s in spans:
       span_fh.write_line s.tostring(locus, targets[locus.tid].name)
  

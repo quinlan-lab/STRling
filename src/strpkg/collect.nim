@@ -3,6 +3,7 @@ import strutils
 import algorithm
 import strformat
 import tables
+import math
 import ./cluster
 import ./utils
 
@@ -103,16 +104,22 @@ proc estimate_size*(spanners: seq[Support], frag_sizes: array[4096, uint32]): in
   var s = small_sizes[int(small_sizes.high/2)]
   return frag_sizes.median - s.int
 
-proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): seq[Support] =
+proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): tuple[support: seq[Support], median_depth: int] =
   var pairs = newTable[string, seq[Record]]()
   doAssert left <= right
-  for aln in b.query(bounds.tid.int, max(0, bounds.left.int - window), bounds.right.int + window):
+  var window_left = bounds.left.int - window
+  var window_right = bounds.right.int + window
+  var depths = newSeq[int](window_right - window_left) # depth per base within the bounds
+  for aln in b.query(bounds.tid.int, max(0, window_left), window_right):
      if aln.flag.secondary or aln.flag.supplementary: continue
      if aln.mapping_quality < min_mapq: continue
 
+     depths[max(0, aln.start - window_left - 1)] += 1
+     depths[min(depths.high, aln.stop - window_left - 1)] -= 1
+
      var s:Support
      if aln.spanning_read(bounds, s):
-       result.add(s)
+       result.support.add(s)
      if aln.tid != aln.mate_tid: continue
      if aln.isize.abs > max_size: continue
 
@@ -127,4 +134,8 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
     if len(pair) != 2: continue
     var s: Support
     if spanning_fragment(pair[0], pair[1], bounds, s, frag_sizes):
-      result.add(s)
+      result.support.add(s)
+
+  depths.cumsum
+  result.median_depth = median_depth(depths)
+

@@ -101,6 +101,18 @@ proc median*(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
       return i
   return fragment_sizes.len
 
+proc median_depth*(D: seq[int]): int =
+  var H = newSeq[int](1048)
+  for d in D:
+    when defined(debug):
+      doAssert d >= 0
+    H[min(d, H.high)] += 1 # Values greater than 1047 will be set to 1047 to avoid overflow
+  var s: int
+  for i, h in H:
+    s += h
+    if float(s) > float(D.len)/2.0:
+      return i
+
 proc init*[T](): Seqs[T] =
   result = [
      Seq[T](A: newSeq[T](0)),
