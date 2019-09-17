@@ -20,36 +20,38 @@ type Evidence = object
   allele1_ru: float
   allele2_ru: float
 
-  allele1_reads: int
-  allele2_reads: int
-  total_reads: int
+  allele1_reads: uint
+  allele2_reads: uint
+  total_reads: uint
  
-type Genotype = object
-  event: Event
-  repeat: string
-  # total allele sizes in repeat units
-  allele1: float
-  allele2: float
-  # and confidence intervals around the allele size esimates
-  GQ: float
-
 type Call = object
   chrom: string
   start: uint
   stop: uint
-  # and confidence intervals around position and size
-  genotype: Genotype
+  # and confidence intervals around position
+  repeat: string # repeat unit
+  # total allele sizes in repeat units
+  allele1: float
+  allele2: float
+  # and confidence intervals around the allele size esimates
   quality: float
+  # Number of supporting reads in each class
+  anchored_pairs: uint
+  spanning_reads: uint
+  spanning_pairs: uint
+  left_clips: uint
+  right_clips: uint
+  unplaced_pairs: uint
   # ...
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.genotype.allele1:.2f}\t{c.genotype.allele2:.2f}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_pairs}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_pairs}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
 proc spanning_read_est(reads: seq[Support]): Evidence =
   result.class = "spanning reads"
-  result.repeat = reads[0].repeat
+  result.repeat = reads[0].repeat #XXX unnecessary?
   var 
     allele1_bp = NaN
     allele2_bp = NaN
@@ -62,6 +64,7 @@ proc spanning_read_est(reads: seq[Support]): Evidence =
     if read.SpanningFragmentLength == 0:
       RepeatCounts.inc(read.SpanningReadRepeatCount)
       Indels.inc(int8(read.SpanningReadCigarInsertionLen) - int8(read.SpanningReadCigarDeletionLen))
+      result.total_reads += 1
 
   if len(RepeatCounts) >= 2:
     var topRepeatCounts = most_frequent(RepeatCounts, 2)
@@ -81,37 +84,66 @@ proc spanning_read_est(reads: seq[Support]): Evidence =
   result.allele1_bp = allele1_bp
   result.allele2_bp = allele2_bp
 
+# Estimate the size of both alleles
+# from read pairs that span the locus
+proc spanning_pairs_est(reads: seq[Support]): Evidence =
+  result.class = "spanning pairs"
+  result.repeat = reads[0].repeat #XXX unnecessary?
+  var 
+    allele1_bp = NaN
+    allele2_bp = NaN
+    allele1_ru = NaN
+    allele2_ru = NaN
+    FragmentSizes: CountTable[uint32]
+
+  for read in reads:
+    if read.SpanningFragmentLength > 0'u32:
+      FragmentSizes.inc(read.SpanningFragmentLength)
+      result.total_reads += 1
+
 # Use a linear model to estimate allele size in bp from sum
 # of counts of str repeat units in the anchored reads
 # result is in bp insertion from the reference
-proc anchored_est(sum_str_counts: uint, depth: float): float =
+proc anchored_lm(sum_str_counts: uint, depth: float): float =
   #XXX These estimates are from the HTT simulation linear model, need to generalize
   var cofficient = 1.106
   var intercept = 3.348
   var y = log2(float(sum_str_counts)/depth + 1) * cofficient + intercept
   return pow(2,y)
 
+proc anchored_est(reads: seq[tread], depth: float): Evidence =
+  result.total_reads = uint(len(reads))
+  var sum_str_counts: uint
+  for tread in reads:
+    sum_str_counts += tread.repeat_count
+  result.allele2_bp = anchored_lm(sum_str_counts, depth)
+
 proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
               targets: seq[Target], depth: float): Call =
   result.chrom = get_chrom(b.tid, targets)
   result.start = b.left
   result.stop = b.right
-  var RUlen = len(b.repeat)
+  result.left_clips = b.n_left
+  result.right_clips = b.n_right
+  result.repeat = b.repeat
+  var RUlen = len(result.repeat)
 
   # Check for spanning reads - indicates a short allele
   if spanners.len == 0:
-    result.genotype.allele1 = NaN
+    result.allele1 = NaN
   else:
-    var small_allele_bp = spanning_read_est(spanners)
-    result.genotype.allele1 = small_allele_bp.allele1_bp/float(RUlen)
+    var spanning_read_est = spanning_read_est(spanners)
+    result.allele1 = spanning_read_est.allele1_bp/float(RUlen)
+    result.spanning_reads = spanning_read_est.total_reads
+
+    var spanning_pairs_est = spanning_pairs_est(spanners)
+    result.spanning_pairs = spanning_pairs_est.total_reads
 
   # Use anchored reads to estimate long allele
-  var sum_str_counts: uint
-  for tread in tandems:
-    sum_str_counts += tread.repeat_count
-
-  var large_allele_bp = anchored_est(sum_str_counts, depth)
-  result.genotype.allele2 = large_allele_bp/float(RUlen)
+  var anchored_est = anchored_est(tandems, depth)
+  result.anchored_pairs = anchored_est.total_reads
+  var large_allele_bp = anchored_est.allele2_bp
+  result.allele2 = large_allele_bp/float(RUlen)
 
   # Revise allele esimates using spanning pairs
 

@@ -177,12 +177,13 @@ proc bounds*(cl:Cluster): Bounds =
   if result.left >= result.right:
     if result.left != result.center_mass and cl.reads[0].tid != 65:
 
-      stderr.write_line "inverted bounds:", result.left, " right:", result.right
-      stderr.write_line "left:", result.left
-      stderr.write_line "center_mass:", result.center_mass
-      for t in cl.reads:
-        stderr.write_line &"  tread{t}"
-      stderr.write_line "##"
+      when defined(debug):
+        stderr.write_line "inverted bounds:", result.left, " right:", result.right
+        stderr.write_line "left:", result.left
+        stderr.write_line "center_mass:", result.center_mass
+        for t in cl.reads:
+          stderr.write_line &"  tread{t}"
+        stderr.write_line "##"
     result.left = result.right - 1
 
 proc trim(cl:var Cluster, max_dist:uint32) =
