@@ -114,6 +114,9 @@ proc call_main*() =
     if c.reads[0].tid == -1:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       continue
+    if c.reads.len >= uint16.high.int:
+      stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
+      continue
     var b = c.bounds
 
     # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
