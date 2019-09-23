@@ -156,20 +156,26 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       posns.add(r.position)
 
-  if posns.len > 0:
-    result.center_mass = posns[int(posns.len / 2)]
   if lefts.len > 0:
     var ll = lefts.largest
     if ll.val > 1:
       result.left = ll.key
-  if result.left == 0:
-    result.left = result.center_mass
   if rights.len > 0:
     var rr = rights.largest
     if rr.val > 1:
       result.right = rr.key
-  if result.right == 0:
-    result.right = result.left + 1
+
+  if posns.len > 0:
+    result.center_mass = posns[int(posns.len / 2)]
+    if result.left == 0:
+      result.left = result.center_mass
+    if result.right == 0:
+      result.right = result.left + 1
+  else:
+    if result.right == 0:
+      result.right = result.left + 1
+    if result.left == 0:
+      result.left = result.right - 1
 
   # finally, here we can have the situation where we set the
   # left based on center-mass and it's larger than right
