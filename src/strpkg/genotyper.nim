@@ -23,6 +23,7 @@ type Evidence = object
   allele1_reads: uint
   allele2_reads: uint
   total_reads: uint
+  sum_str_counts: uint
  
 type Call = object
   chrom: string
@@ -42,10 +43,12 @@ type Call = object
   left_clips: uint
   right_clips: uint
   unplaced_pairs: uint
+  depth: float #median depth in region
+  sum_str_counts: uint
   # ...
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_pairs}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_pairs}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_pairs}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_pairs}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -113,10 +116,9 @@ proc anchored_lm(sum_str_counts: uint, depth: float): float =
 
 proc anchored_est(reads: seq[tread], depth: float): Evidence =
   result.total_reads = uint(len(reads))
-  var sum_str_counts: uint
   for tread in reads:
-    sum_str_counts += tread.repeat_count
-  result.allele2_bp = anchored_lm(sum_str_counts, depth)
+    result.sum_str_counts += tread.repeat_count
+  result.allele2_bp = anchored_lm(result.sum_str_counts, depth)
 
 proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
               targets: seq[Target], depth: float): Call =
@@ -126,6 +128,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   result.left_clips = b.n_left
   result.right_clips = b.n_right
   result.repeat = b.repeat
+  result.depth = depth
   var RUlen = len(result.repeat)
 
   # Check for spanning reads - indicates a short allele
@@ -142,6 +145,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   # Use anchored reads to estimate long allele
   var anchored_est = anchored_est(tandems, depth)
   result.anchored_pairs = anchored_est.total_reads
+  result.sum_str_counts = anchored_est.sum_str_counts
   var large_allele_bp = anchored_est.allele2_bp
   result.allele2 = large_allele_bp/float(RUlen)
 
