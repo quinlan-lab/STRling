@@ -14,6 +14,6 @@ install:
     - nimble install -y
     - export LD_LIBRARY_PATH=./htslib/
 script:
-    - ./str -h
+    - ./strling -h
     - nimble test -y
 
