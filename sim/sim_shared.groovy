@@ -106,7 +106,26 @@ index_bam = {
     forward input
 }
 
-str = {
+str_extract = {
+
+    output.dir = "str"
+
+    def bamname = get_fname(input.bam)
+    def str_ref = get_fname(REF) + ".str"
+    produce(bamname.prefix + ".str.bin") {
+        exec """
+            $STR_NIM extract
+                -f $REF
+                -g $str_ref
+                -p 0.8
+                -v
+                $input.bam
+                $output.bin
+        """
+    }
+}
+
+str_call = {
 
     output.dir = "str"
 
@@ -114,12 +133,12 @@ str = {
 
     produce(bamname.prefix + "-reads.txt", bamname.prefix + "-bounds.txt") {
         exec """
-            $STR_NIM 
-                -p 0.7
+            $STR_NIM call
                 -v
                 -l $HTT_regions
                 -o ${output.dir + '/' + bamname.prefix}
                 $input.bam
+                $input.bin
         """
     }
 }

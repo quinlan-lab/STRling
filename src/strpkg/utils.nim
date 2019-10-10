@@ -2,7 +2,8 @@ import kmer
 import strutils
 import hts/bam
 import math
-import hts/bam
+import tables
+import strformat
 
 {.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
@@ -113,6 +114,27 @@ proc median_depth*(D: seq[int]): int =
     if float(s) > float(D.len)/2.0:
       return i
 
+proc mode*[T](xs: openArray[T]): T =
+  var count = initCountTable[T]()
+  return xs.toCountTable.largest.key
+
+# Report the n most frequent keys in a CountTable, in decending order
+proc most_frequent*[T](table: var CountTable[T], n: int): seq[T] =
+  table.sort()
+  if n > len(table):
+    raise newException(IndexError, &"Insufficient keys in CountTable ({len(table)}) to report {n}")
+  result = newseq[T](n)
+  var i = 0
+  for key, count in table:
+    if i < n:
+      result[i] = key
+      inc i
+    else:
+      break
+
+proc isNaN(v:float): bool {.inline.} =
+  return v.classify == fcNaN
+
 proc init*[T](): Seqs[T] =
   result = [
      Seq[T](A: newSeq[T](0)),
@@ -185,4 +207,10 @@ proc tostring*(a:array[6, char]): string =
   for c in a:
     if c == 0.char: return
     result.add(c)
+
+# Get a chromosome name for a given tid
+proc get_chrom*(tid:int, targets: seq[Target]): string =
+  for t in targets:
+    if t.tid == tid:
+      return t.name
 

@@ -53,6 +53,6 @@ run {
         mutate_locus +
         "%.bed" * [
             simulate_str_reads +
-            str
+            str_extract + str_call
         ] + combine
 }

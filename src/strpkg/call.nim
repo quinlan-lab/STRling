@@ -10,6 +10,7 @@ import hts/bam
 import ./cluster
 import ./collect
 import ./utils
+import ./genotyper
 export tread
 export Soft
 import strformat
@@ -82,10 +83,13 @@ proc call_main*() =
 
   ### discovery
   var
+    gt_fh:File
     reads_fh:File
     bounds_fh:File
     span_fh:File
     unplaced_fh:File
+  if not open(gt_fh, args.output_prefix & "-genotype.txt", mode=fmWrite):
+    quit "couldn't open output file"
   if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
@@ -110,6 +114,9 @@ proc call_main*() =
     if c.reads[0].tid == -1:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       continue
+    if c.reads.len >= uint16.high.int:
+      stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
+      continue
     var b = c.bounds
 
     # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
@@ -125,7 +132,10 @@ proc call_main*() =
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
+
     var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+    var gt = genotype(b, c.reads, spans, targets, float(median_depth))
+    gt_fh.write_line gt.tostring()
     var estimate = spans.estimate_size(frag_dist)
     bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
     for s in spans:
@@ -150,13 +160,14 @@ proc call_main*() =
   ### genotyping
   # ???
    
-
+  gt_fh.close
   reads_fh.close
   bounds_fh.close
   span_fh.close
   unplaced_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
+    stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
     stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
     stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
     stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"

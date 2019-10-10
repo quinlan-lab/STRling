@@ -14,6 +14,6 @@ run {
 
         "%.fasta" * [
             generate_reads +
-            align_bwa + index_bam + str
+            align_bwa + index_bam + str_extract + str_call
         ]
 }

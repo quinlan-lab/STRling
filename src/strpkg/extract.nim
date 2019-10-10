@@ -238,7 +238,10 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
   else:
     var tr = aln.to_tread(genome_str, counts, opts)
     cache.add_soft(aln, counts, opts, tr.repeat)
-    doAssert not cache.tbl.hasKeyOrPut(aln.qname, tr), "error with read:" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+    if cache.tbl.hasKeyOrPut(aln.qname, tr):
+      stderr.write_line "[str] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+      var mate:tread
+      discard cache.tbl.take(aln.qname, mate)
 
 proc extract_main*() =
   # Parse args/options

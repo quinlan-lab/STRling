@@ -20,11 +20,12 @@ type Support* = object
   # counting number of deletion ops.
   SpanningReadCigarInsertionLen*: uint8
   SpanningReadCigarDeletionLen*: uint8
+  repeat*: string
   when defined(debug) or defined(qname):
     qname: string
 
 proc tostring*(s:Support, b:Bounds, chrom:string): string =
-  result = &"{chrom}\t{b.left}\t{b.right}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}"
+  result = &"{chrom}\t{b.left}\t{b.right}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}"
   when defined(debug) or defined(qname):
     result &= "\t" & s.qname
 
@@ -33,6 +34,7 @@ proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, 
   if L.start < bounds.left.int and R.stop > bounds.right.int:
     support.SpanningFragmentLength = max(1'u32, L.isize.abs.uint32)
     support.SpanningFragmentPercentile = frag_sizes.percentile(support.SpanningFragmentLength.int)
+    support.repeat = bounds.repeat
     when defined(debug) or defined(qname):
       support.qname = L.qname
     result = true
@@ -128,8 +130,9 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      # should instead add a reduced object with chrom, sequence, cigar
      pairs.mgetOrPut(aln.qname, @[]).add(aln.copy())
 
-  if pairs.len > 5_000:
-    stderr.write_line "large pairs seq in spanners() for " & $bounds & " got " & $pairs.len & " pairs"
+  when defined(debug):
+    if pairs.len > 5_000:
+      stderr.write_line "large pairs seq in spanners() for " & $bounds & " got " & $pairs.len & " pairs"
   for qname, pair in pairs:
     if len(pair) != 2: continue
     var s: Support
