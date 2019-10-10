@@ -1,35 +1,35 @@
-[![Build Status](https://travis-ci.com/hdashnow/str-dev.svg?branch=master)](https://travis-ci.com/hdashnow/str-dev)
+[![Build Status](https://travis-ci.com/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.com/quinlan-lab/STRling)
 
 ## Install from source
 
 Install nim:  
 `curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh && sh init.sh`
 
-Install str:  
+Install STRling:  
 ```
 git clone <URL>
-cd str-dev
+cd STRling
 nimble install
 ```
 
 Compile options for development:  
 
 Compile in fast mode (danger) with read names reported:  
-`nim c -d:danger -d:qname src/str.nim`
+`nim c -d:danger -d:qname src/strling.nim`
 
 ## Run
 
 #### extract informative pairs to a binary format
 ```
 name=hg002
-str extract -v -f $reference_fasta /path/to/$name.cram $name.bin
+strling extract -v -f $reference_fasta /path/to/$name.cram $name.bin
 ```
 
 #### call strs on the extract binary data
 
 ```
 mkdir -p str-results/
-str call --output-prefix str-results/$name -f $reference_fasta /path/to/$name.cram $name.bin
+strling call --output-prefix str-results/$name -f $reference_fasta /path/to/$name.cram $name.bin
 ```
 
 
