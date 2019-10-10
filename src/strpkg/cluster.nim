@@ -156,20 +156,26 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       posns.add(r.position)
 
-  if posns.len > 0:
-    result.center_mass = posns[int(posns.len / 2)]
   if lefts.len > 0:
     var ll = lefts.largest
     if ll.val > 1:
       result.left = ll.key
-  if result.left == 0:
-    result.left = result.center_mass
   if rights.len > 0:
     var rr = rights.largest
     if rr.val > 1:
       result.right = rr.key
-  if result.right == 0:
-    result.right = result.left + 1
+
+  if posns.len > 0:
+    result.center_mass = posns[int(posns.len / 2)]
+    if result.left == 0:
+      result.left = result.center_mass
+    if result.right == 0:
+      result.right = result.left + 1
+  else:
+    if result.right == 0:
+      result.right = result.left + 1
+    if result.left == 0:
+      result.left = result.right - 1
 
   # finally, here we can have the situation where we set the
   # left based on center-mass and it's larger than right
@@ -177,12 +183,13 @@ proc bounds*(cl:Cluster): Bounds =
   if result.left >= result.right:
     if result.left != result.center_mass and cl.reads[0].tid != 65:
 
-      stderr.write_line "inverted bounds:", result.left, " right:", result.right
-      stderr.write_line "left:", result.left
-      stderr.write_line "center_mass:", result.center_mass
-      for t in cl.reads:
-        stderr.write_line &"  tread{t}"
-      stderr.write_line "##"
+      when defined(debug):
+        stderr.write_line "inverted bounds:", result.left, " right:", result.right
+        stderr.write_line "left:", result.left
+        stderr.write_line "center_mass:", result.center_mass
+        for t in cl.reads:
+          stderr.write_line &"  tread{t}"
+        stderr.write_line "##"
     result.left = result.right - 1
 
 proc trim(cl:var Cluster, max_dist:uint32) =

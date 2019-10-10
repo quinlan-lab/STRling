@@ -35,15 +35,21 @@ def parse_bed(f):
         alleles = parse_alleles(firstline[-1])
         return(alleles)
 
+def parse_gt(all_files):
+    header = 'chrom,left,right,repeatunit,allele1_est,allele2_est,anchored_pairs,spanning_reads,spanning_pairs,left_clips,right_clips,unplaced_pairs,depth,sum_str_counts'
+    all_df_list = []
+    for f in all_files:
+        df = pd.read_csv(f, sep='\t', names=header.split(','))
+        df['sim'] = get_sim_str(f)
+        all_df_list.append(df)
+    all_df = pd.concat(all_df_list)
+    return(all_df)
+
 def parse_bounds(all_files):
-    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,estimate'
+    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,depth'
     all_df_bounds = []
     for f in all_files:
         df = pd.read_csv(f, sep='\t', names=header.split(','))
-        try:
-            df['estimate'] = df.estimate.str.split(':',expand=True,).iloc[:,1]
-        except IndexError:
-            pass
         df['sim'] = get_sim_str(f)
         all_df_bounds.append(df)
     all_df = pd.concat(all_df_bounds)
@@ -81,7 +87,12 @@ def main():
         sim = get_sim(f)
         bed_df.loc[int(sim)] = parse_bed(f)+[sim]
     bed_df.to_csv(args.out + '-sims.csv', index=False)
-    
+
+    gtfiles = glob.glob(args.str_dir+"/*-genotype.txt")
+    if len(gtfiles) == 0:
+        sys.exit('ERROR: No -genotype.txt files found in the given directory: ' + args.str_dir)
+    parse_gt(gtfiles).to_csv(args.out + '-genotype.csv', index=False)
+   
     boundsfiles = glob.glob(args.str_dir+"/*-bounds.txt")
     if len(boundsfiles) == 0:
         sys.exit('ERROR: No -bounds.txt files found in the given directory: ' + args.str_dir)
