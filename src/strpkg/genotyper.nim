@@ -35,14 +35,14 @@ type Call = object
   allele1: float
   allele2: float
   # and confidence intervals around the allele size esimates
-  quality: float
+  quality: float #XXX currently not in use
   # Number of supporting reads in each class
   anchored_pairs: uint
   spanning_reads: uint
   spanning_pairs: uint
   left_clips: uint
   right_clips: uint
-  unplaced_pairs: uint
+  unplaced_pairs: uint #XXX not yet calculated
   depth: float #median depth in region
   sum_str_counts: uint
   # ...
