@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.com/quinlan-lab/STRling)
+[![Build Status](https://travis-ci.org/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.org/quinlan-lab/STRling)
 
 ## Install from source
 
