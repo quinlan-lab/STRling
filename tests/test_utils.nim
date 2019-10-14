@@ -35,31 +35,31 @@ suite "utils suite":
 
   test "that reduce repeat reduces  homopolymers":
     var a = ['C', 'C', 'C', '\0', '\0', '\0']
-    a.reduce_repeat
+    check 3 == a.reduce_repeat
     check a == ['C', '\0', '\0', '\0', '\0', '\0']
 
     a = ['A', 'A', '\0', '\0', '\0', '\0']
-    a.reduce_repeat
+    check 2 == a.reduce_repeat
     check a == ['A', '\0', '\0', '\0', '\0', '\0']
 
     a = ['A', 'A', '\0', '\0', '\0', '\0']
-    a.reduce_repeat
+    check 2 == a.reduce_repeat
     check a == ['A', '\0', '\0', '\0', '\0', '\0']
 
     a = ['A', 'A', 'A', 'A', 'A', 'A']
-    a.reduce_repeat
+    check 6 == a.reduce_repeat
     check a == ['A', '\0', '\0', '\0', '\0', '\0']
 
   test "that reduce repeat does not reduce  non-homopolymers":
     var a = ['C', 'T', 'C', '\0', '\0', '\0']
-    a.reduce_repeat
+    check 1 == a.reduce_repeat
     check a == ['C', 'T', 'C', '\0', '\0', '\0']
 
     a = ['C', 'T', 'C', 'C', '\0', '\0']
-    a.reduce_repeat
+    check 1 == a.reduce_repeat
     check a == ['C', 'T', 'C', 'C', '\0', '\0']
 
     a = ['C', 'C', 'C', 'C', 'C', 'T']
-    a.reduce_repeat
+    check 1 == a.reduce_repeat
     check a == ['C', 'C', 'C', 'C', 'C', 'T']
 

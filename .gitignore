@@ -1,1 +1,4 @@
 str
+tests/test_utils
+tests/test_strling
+tests/all

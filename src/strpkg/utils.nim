@@ -174,7 +174,10 @@ proc get_tid*(name:string, targets: seq[Target]): int =
       return t.tid
   return -1
 
-proc reduce_repeat*(rep: var array[6, char]) =
+proc reduce_repeat*(rep: var array[6, char]): int =
+  ## change e.g. AA to A. result is the mutliplier, so AA to A becomes 2.
+  ## CCC to C is 1.
+  result = 1
   if rep[0] == '\0': return
   var seen = rep[0]
   for i in 1..<rep.len:
@@ -182,6 +185,8 @@ proc reduce_repeat*(rep: var array[6, char]) =
     if rep[i] != seen: return
   # if we got here, we have a homopolymer
   for i in 1..<rep.len:
+    if rep[i] == '\0': break
+    result.inc
     rep[i] = '\0'
 
 # This is the bottleneck for run time at the moment
@@ -212,7 +217,7 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
       # cant possibly see a repeat.
       break
 
-  reduce_repeat(result)
+  repeat_count *= reduce_repeat(result)
 
 proc tostring*(a:array[6, char]): string =
   for c in a:
