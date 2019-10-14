@@ -61,7 +61,7 @@ suite "strling suite":
     var align_length = 0
 
     var rep = a.get_repeat(nil, counts, repeat_count, align_length, opts)
-    check rep == ['A', 'A', '\x00', '\x00', '\x00', '\x00']
+    check rep == ['A', '\0', '\x00', '\x00', '\x00', '\x00']
 
 
   test "unplaced read pair: both str":

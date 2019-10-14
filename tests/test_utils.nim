@@ -32,3 +32,34 @@ suite "utils suite":
     var y = 1.5
     check x.isNaN
     check not y.isNaN
+
+  test "that reduce repeat reduces  homopolymers":
+    var a = ['C', 'C', 'C', '\0', '\0', '\0']
+    a.reduce_repeat
+    check a == ['C', '\0', '\0', '\0', '\0', '\0']
+
+    a = ['A', 'A', '\0', '\0', '\0', '\0']
+    a.reduce_repeat
+    check a == ['A', '\0', '\0', '\0', '\0', '\0']
+
+    a = ['A', 'A', '\0', '\0', '\0', '\0']
+    a.reduce_repeat
+    check a == ['A', '\0', '\0', '\0', '\0', '\0']
+
+    a = ['A', 'A', 'A', 'A', 'A', 'A']
+    a.reduce_repeat
+    check a == ['A', '\0', '\0', '\0', '\0', '\0']
+
+  test "that reduce repeat does not reduce  non-homopolymers":
+    var a = ['C', 'T', 'C', '\0', '\0', '\0']
+    a.reduce_repeat
+    check a == ['C', 'T', 'C', '\0', '\0', '\0']
+
+    a = ['C', 'T', 'C', 'C', '\0', '\0']
+    a.reduce_repeat
+    check a == ['C', 'T', 'C', 'C', '\0', '\0']
+
+    a = ['C', 'C', 'C', 'C', 'C', 'T']
+    a.reduce_repeat
+    check a == ['C', 'C', 'C', 'C', 'C', 'T']
+
