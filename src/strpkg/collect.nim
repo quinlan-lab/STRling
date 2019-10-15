@@ -82,8 +82,8 @@ proc count(A: Record, bounds:Bounds): int =
   return dna[read_left..<read_right].count(bounds.repeat)
 
 proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
-
-  if A.start < bounds.left.int and A.stop > bounds.right.int:
+  var slop = bounds.repeat.len - 1
+  if A.start < (bounds.left.int - slop) and A.stop > (bounds.right.int + slop):
     # just do a count directly
     support.SpanningReadRepeatCount = A.count(bounds).uint8
     when defined(debug) or defined(qname):
