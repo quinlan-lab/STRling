@@ -31,7 +31,8 @@ proc tostring*(s:Support, b:Bounds, chrom:string): string =
 
 proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, frag_sizes: array[4096, uint32]): bool =
   doAssert L.start <= R.start
-  if L.start < bounds.left.int and R.stop > bounds.right.int:
+  var slop = bounds.repeat.len - 1
+  if L.start < (bounds.left.int - slop) and R.stop > (bounds.right.int + slop):
     support.SpanningFragmentLength = max(1'u32, L.isize.abs.uint32)
     support.SpanningFragmentPercentile = frag_sizes.percentile(support.SpanningFragmentLength.int)
     support.repeat = bounds.repeat
