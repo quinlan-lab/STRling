@@ -43,9 +43,11 @@ suite "collect suite":
     check h.hdr != nil
 
     var a = NewRecord(h)
-    a.from_string("read1	99	chr1	1	40	15M5S	chr1	500	0	AAAAAAAAAAAAAAAAAAAA	*")
+    var atxt = "read1	99	chr1	1	40	15M5S	chr1	500	0	AAAAAAAAAAAAAAAAAAAA	*"
+    a.from_string(atxt)
     var b = NewRecord(h)
-    b.from_string("read1	147	chr1	500	40	15M5S	chr1	1	0	AAAAAAAAAAAAAAAAAAAA	*")
+    var btxt = "read1	147	chr1	500	40	15M5S	chr1	1	0	AAAAAAAAAAAAAAAAAAAA	*"
+    b.from_string(btxt)
     
     var frag_sizes: array[4096, uint32]
     frag_sizes[0] = 500
