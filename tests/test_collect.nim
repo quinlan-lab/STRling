@@ -13,7 +13,7 @@ suite "collect suite":
     check h.hdr != nil
 
     var a = NewRecord(h)
-    var txt = "read1	0	chr1	1	40	15M5S	*	0	0	AAAAAAAAAAAAAAAAAAAA	*"
+    var txt = "read1	0	chr1	1	40	25M5S	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	*"
     a.from_string(txt)
 
     var support:Support
@@ -22,17 +22,18 @@ suite "collect suite":
     bounds = Bounds(tid: 0, left: 5, right: 100, repeat: "A")
     check spanning_read(a, bounds, support) == false
 
-    bounds = Bounds(tid: 0, left: 5, right: 10, repeat: "A")
+    # Require the read to span (repeat length - 1) bp either side of the bounds
+    bounds = Bounds(tid: 0, left: 5, right: 15, repeat: "AAAAAA")
+    check spanning_read(a, bounds, support) == false
+
+    bounds = Bounds(tid: 0, left: 6, right: 15, repeat: "AAAAAA")
     check spanning_read(a, bounds, support) == true
 
-    bounds = Bounds(tid: 0, left: 1, right: 15, repeat: "A")
+    # Require extra slop for small bounds
+    bounds = Bounds(tid: 0, left: 9, right: 10, repeat: "AAAAAA")
     check spanning_read(a, bounds, support) == false
 
-    # Require the read to span (repeat length - 1) bp either side of the bounds
-    bounds = Bounds(tid: 0, left: 5, right: 7, repeat: "AAAAAA")
-    check spanning_read(a, bounds, support) == false
-
-    bounds = Bounds(tid: 0, left: 6, right: 7, repeat: "AAAAAA")
+    bounds = Bounds(tid: 0, left: 10, right: 11, repeat: "AAAAAA")
     check spanning_read(a, bounds, support) == true
 
   test "test spanning pair":
@@ -50,12 +51,17 @@ suite "collect suite":
     b.from_string(btxt)
     
     var frag_sizes: array[4096, uint32]
-    frag_sizes[0] = 500
-    frag_sizes[1] = 450
     var support:Support
     var bounds:Bounds
-    bounds = Bounds(tid: 0, left: 100, right: 150, repeat: "A")
 
+    bounds = Bounds(tid: 0, left: 100, right: 150, repeat: "A")
     check spanning_fragment(a, b, bounds, support, frag_sizes) == true
+
+    bounds = Bounds(tid: 0, left: 450, right: 513, repeat: "A")
+    check spanning_fragment(a, b, bounds, support, frag_sizes) == true
+
+    # Require extra slop for small bounds
+    bounds = Bounds(tid: 0, left: 512, right: 513, repeat: "A")
+    check spanning_fragment(a, b, bounds, support, frag_sizes) == false
 
 
