@@ -17,6 +17,7 @@ import math
 import argparse
 
 proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts:var Seqs[uint8], repeat_count: var int, align_length: var int, opts:Options): array[6, char] =
+  repeat_count = 0
   when defined(skipFullMatch):
     # compile with -d:skipFullMatch to make it much faster
     if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match:
@@ -220,6 +221,11 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
 
     # If both reads in pair are STR, or one is STR, one low mapping qual, set position to unknown
     if unplaced_pair(self, mate, opts):
+      # we only keep unplaced pairs if both reads have some repeat unit
+      # we could require them to have the same repeat unit...
+      if self.repeat[0] == '\0' or mate.repeat[0] == '\0':
+        return
+
       # NOTE: we don't know if we need to reverse complement these reads
       # so we will have to equate forward and reverse repeat units later.
       self.position = uint32(0)
