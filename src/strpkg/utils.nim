@@ -211,6 +211,8 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
       if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
         copyMem(result.addr, s[0].addr, k)
         repeat_count = count
+        if repeat_count > 0 and result[0] == '\0':
+          quit "bad:" & $k & " " & $result & " " & "kmer:" & s
     elif count < (read.len.float * 0.12 / k.float).int:
       # e.g. for a 5 mer repeat, we should see some 2, 3, 4 mer reps and we can
       # bail if we do not. this is an optimization to avoid counting when we
@@ -218,6 +220,8 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
       break
 
   repeat_count *= reduce_repeat(result)
+
+
 
 proc tostring*(a:array[6, char]): string =
   for c in a:

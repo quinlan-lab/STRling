@@ -132,6 +132,8 @@ proc call_main*() =
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
+    # skip with only a single splitter
+    if b.n_left + b.n_right <= 1: continue
 
     var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var gt = genotype(b, c.reads, spans, targets, float(median_depth))
