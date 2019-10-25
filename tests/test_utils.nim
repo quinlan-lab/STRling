@@ -63,3 +63,13 @@ suite "utils suite":
     check 1 == a.reduce_repeat
     check a == ['C', 'C', 'C', 'C', 'C', 'T']
 
+  test "test canonical_repeat array":
+    var repeat = ['C', 'C', 'C', 'T', 'T', '\0']
+    var rev = repeat.canonical_repeat
+    check rev == ['A', 'A', 'G', 'G', 'G', '\0']
+
+  test "test canonical_repeat string":
+    var repeat = "CCCTT"
+    var rev = repeat.canonical_repeat
+    check rev == "AAGGG"
+

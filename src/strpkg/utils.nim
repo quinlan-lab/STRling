@@ -4,6 +4,7 @@ import hts/bam
 import math
 import tables
 import strformat
+import algorithm
 
 {.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
@@ -42,6 +43,30 @@ proc complement*(xs: string): string =
   for i, x in xs:
     # high == len - 1
     result[i] = complement(x)
+
+proc min_rev_complement*(repeat: var array[6, char]) {.inline.} =
+  # find the minimal reverse complement of this repeat.
+  # this turns the repeat in array to a string, doubles it so that ACT becomes
+  # (the complement of) ACTACT and finds the minimal 3-mer of ACT, CTA, TAC
+  # this could be optimized but probably won't be called often
+  var s: string
+  for c in repeat:
+    if c == 0.char: break
+    s.add(c)
+  s = s.reverse_complement
+  let l = s.len
+  s.add(s)
+  var mv = uint64(0) - 1'u64
+  for m in s.slide_by(l):
+    if m < mv:
+      mv = m
+  var ms = newString(l)
+  mv.decode(ms)
+  for i in 0..<l:
+    repeat[i] = ms[i]
+
+  # Return either the original or reverse complement as a string, 
+  # whichever is first alphabetically
 
 
 proc fragment_length_distribution*(bam:Bam, n_reads:int=2_000_000, skip_reads:int=100_000): array[4096, uint32] =
@@ -221,8 +246,6 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
 
   repeat_count *= reduce_repeat(result)
 
-
-
 proc tostring*(a:array[6, char]): string =
   for c in a:
     if c == 0.char: return
@@ -233,4 +256,19 @@ proc get_chrom*(tid:int, targets: seq[Target]): string =
   for t in targets:
     if t.tid == tid:
       return t.name
+
+proc canonical_repeat*(repeat: array[6, char]): array[6, char] =
+  var rev = repeat
+  rev.min_rev_complement
+  var first = @[repeat.tostring, rev.tostring].sorted[0]
+  for i in 0..len(first) - 1:
+    result[i] = first[i]
+
+proc canonical_repeat*(repeat: string): string =
+  var forward = ['\0', '\0', '\0', '\0', '\0', '\0']
+  for i in 0..len(repeat) - 1:
+    forward[i] = repeat[i]
+  var rev = forward
+  rev.min_rev_complement
+  result = @[forward.tostring, rev.tostring].sorted[0]
 
