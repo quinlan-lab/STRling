@@ -7,10 +7,12 @@ import times
 import random
 import tables
 import hts/bam
+import hts/fai
 import ./cluster
 import ./collect
 import ./utils
 import ./genotyper
+import ./genome_strs
 export tread
 export Soft
 import strformat
@@ -21,10 +23,10 @@ import ./extract
 proc call_main*() =
   var p = newParser("str call"):
     option("-f", "--fasta", help="path to fasta file")
-    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
-    option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
+    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
+    option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
-    option("-o", "--output-prefix", help="prefix for output files", default="strstrstr")
+    option("-o", "--output-prefix", help="prefix for output files", default="strling")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
     arg("bin", help="bin file previously created by `str extract`")
@@ -73,6 +75,7 @@ proc call_main*() =
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median,
                       min_support: min_support, min_mapq: min_mapq)
+  var nreads = 0
 
   var fs = newFileStream(args.bin, fmRead)
   while not fs.atEnd:
@@ -132,8 +135,24 @@ proc call_main*() =
     if b.right - b.left > 1000'u32:
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
-    # skip with only a single splitter
-    if b.n_left + b.n_right <= 1: continue
+    # require left and right support
+    if b.n_left < 2: continue
+    if b.n_right < 2: continue
+    if b.n_right + b.n_left < 5: continue
+
+    #[
+    #debugging for reference size
+    var ref_size = b.check_reference_size(fai, targets[b.tid].name)
+    echo ref_size, b
+
+    var gr: seq[region]
+
+    try:
+      if genome_str[targets[b.tid].name].find(b.left.int - 10, b.right.int + 10, gr):
+      else:
+    except KeyError:
+      discard
+    ]#
 
     var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var gt = genotype(b, c.reads, spans, targets, float(median_depth))
