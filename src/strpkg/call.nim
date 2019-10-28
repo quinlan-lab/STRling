@@ -136,8 +136,9 @@ proc call_main*() =
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
     # require left and right support
-    if b.n_left < 3: continue
-    if b.n_right < 3: continue
+    if b.n_left < 2: continue
+    if b.n_right < 2: continue
+    if b.n_right + b.n_left < 5: continue
 
     #[
     #debugging for reference size
