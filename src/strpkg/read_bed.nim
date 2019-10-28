@@ -10,7 +10,7 @@ type
     chrom*: string
     start*: int
     stop*: int
-    #name: string
+    name*: string
 
 proc start*(r: region): int {.inline.} = r.start
 proc stop*(r: region): int {.inline.} = r.stop
@@ -24,8 +24,8 @@ proc bed_line_to_region(line: string): region =
   result.start = parse_int(cse[1])
   result.stop = parse_int(cse[2])
   result.chrom = cse[0]
-   #if len(cse) > 3:
-   #  reg.name = cse[3]
+  if len(cse) > 3:
+    result.name = cse[3]
 
 proc read_bed*(bed: string): TableRef[string, Lapper[region]] =
   var bed_regions = newTable[string, seq[region]]()

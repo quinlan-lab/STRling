@@ -256,7 +256,7 @@ proc extract_main*() =
     option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
-    option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="20")
+    option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
     arg("bin", help="path bin to output bin file to be created")

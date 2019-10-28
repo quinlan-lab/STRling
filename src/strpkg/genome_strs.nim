@@ -5,10 +5,12 @@ import tables
 import lapper
 import algorithm
 import strutils
+import ./cluster
 import ./utils
 import strformat
 import ./read_bed
 export read_bed
+import hts/fai
 
 type Window = object
   chrom: string
@@ -137,6 +139,32 @@ proc genome_repeats*(fasta:string, opts:Options, bed_path:string): TableRef[stri
     quit &"[str] couldn't open fasta {fasta} make sure file is present and has a .fai index"
   result = fai.genome_repeats(opts, bed_path)
 
+
+proc check_reference_size*(b:Bounds, fai:Fai, chrom: string): int =
+  var reference = fai.get(chrom, b.left.int, b.right.int + 200)
+  var right = int(b.right - b.left)
+  let  span = right
+  var left = 0
+  var nmiss = 0
+  var ntotal_miss = 0
+  while ntotal_miss < 2 and right < reference.len:
+    # allow 2 total misses, but not more than 1 in a row.
+    if reference[left..right].count(b.repeat).float < 0.5 * span.float:
+      nmiss += 1
+      ntotal_miss += 1
+      if nmiss == 2:
+        right -= span
+        break
+      left += span
+      right += span
+      continue
+    nmiss = 0
+    left += span
+    right += span
+  right -= span
+
+  result = reference[0..<min(right, reference.len)].count(b.repeat)
+
 proc genome_main*() =
 
   var p = newParser("str genome-sites"):
@@ -172,4 +200,5 @@ when isMainModule:
   ]#
 
   genome_main()
+
 
