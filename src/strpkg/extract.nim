@@ -186,12 +186,16 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
       A.position = B.position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
 
     A.tid = B.tid
+    A.mapping_quality = B.mapping_quality
     if A.flag.should_reverse:
       A.repeat.min_rev_complement
 
   # A is STR, A is mapped well
   elif A.mapping_quality >= opts.min_mapq or A.flag.proper_pair:
     A.position += uint32(A.align_length.float / 2'f + 0.5) # Record position as middle of A
+    # we also ajdust the mapping quality, in case we had proper pair with
+    # low mapping quality in A
+    A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
 
 # Return true if both reads in pair are STR, or one is STR, one low mapping qual
 proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
