@@ -268,7 +268,7 @@ proc extract_main*() =
     option("-f", "--fasta", help="path to fasta file (required for CRAM)")
     option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
-    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
+    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
