@@ -116,10 +116,14 @@ proc call_main*() =
     # Parse bed file of regions and report spanning reads
     loci = parse_loci(args.loci, targets)
 
+  var unplaced_counts = initCountTable[string]()
+  var genotypes_by_repeat = initTable[string, seq[Call]]()
+
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
       unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
+      unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
       continue
     if c.reads.len >= uint16.high.int:
       stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
@@ -160,7 +164,12 @@ proc call_main*() =
 
     var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
     var gt = genotype(b, c.reads, spans, targets, float(median_depth))
-    gt_fh.write_line gt.tostring()
+
+    var canon_repeat = b.repeat.canonical_repeat
+    if not genotypes_by_repeat.hasKey(canon_repeat):
+      genotypes_by_repeat[canon_repeat] = @[]
+    genotypes_by_repeat[canon_repeat].add(gt)
+
     var estimate = spans.estimate_size(frag_dist)
     bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
     for s in spans:
@@ -182,9 +191,16 @@ proc call_main*() =
  
   ### end discovery
 
-  ### genotyping
-  # ???
-   
+  # Loop through again and refine genotypes
+  for repeat, genotypes in genotypes_by_repeat:
+    if len(genotypes) == 1:
+      var gt = genotypes[0]
+      gt.update_genotype(unplaced_counts[repeat])
+      gt_fh.write_line gt.tostring()
+    else:
+      for gt in genotypes:
+        gt_fh.write_line gt.tostring()
+
   gt_fh.close
   reads_fh.close
   bounds_fh.close

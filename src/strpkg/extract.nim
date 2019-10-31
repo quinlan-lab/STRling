@@ -140,27 +140,6 @@ proc should_reverse(f:Flag): bool {.inline.} =
   if f.reverse:
     result = not result
 
-proc min_rev_complement(repeat: var array[6, char]) {.inline.} =
-  # find the minimal reverse complement of this repeat.
-  # this turns the repeat in array to a string, doubles it so that ACT becomes
-  # (the complement of) ACTACT and finds the minimal 3-mer of ACT, CTA, TAC
-  # this could be optimized but probably won't be called often
-  var s: string
-  for c in repeat:
-    if c == 0.char: break
-    s.add(c)
-  s = s.reverse_complement
-  let l = s.len
-  s.add(s)
-  var mv = uint64(0) - 1'u64
-  for m in s.slide_by(l):
-    if m < mv:
-      mv = m
-  var ms = newString(l)
-  mv.decode(ms)
-  for i in 0..<l:
-    repeat[i] = ms[i]
-
 proc adjust_by(A:var tread, B:tread, opts:Options): bool =
   if A.repeat_count == 0'u8: return false
   # potentially adjust A position by B
@@ -236,10 +215,12 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
       if self.repeat[0] == '\0' or mate.repeat[0] == '\0':
         return
 
-      # NOTE: we don't know if we need to reverse complement these reads
-      # so we will have to equate forward and reverse repeat units later.
+      # Since the true location of these reads is unknown, set the 
+      # repeat to the first alphabetically of seq and reverse complement
+      self.repeat = self.repeat.canonical_repeat
       self.position = uint32(0)
       self.tid = -1
+      mate.repeat = mate.repeat.canonical_repeat
       mate.position = uint32(0)
       mate.tid = -1
       cache.cache.add(self)

@@ -25,7 +25,7 @@ type Evidence = object
   total_reads: uint
   sum_str_counts: uint
  
-type Call = object
+type Call* = object
   chrom: string
   start: uint
   stop: uint
@@ -42,13 +42,13 @@ type Call = object
   spanning_pairs: uint
   left_clips: uint
   right_clips: uint
-  unplaced_pairs: uint #XXX not yet calculated
+  unplaced_reads: int # only used for genotypes with unique repeat units
   depth: float #median depth in region
   sum_str_counts: uint
   # ...
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_pairs}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_pairs}\t{c.depth}\t{c.sum_str_counts}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_pairs}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -115,10 +115,18 @@ proc anchored_lm(sum_str_counts: uint, depth: float): float =
   return pow(2,y)
 
 proc anchored_est(reads: seq[tread], depth: float): Evidence =
+  # Estimate size in bp using repeat content of anchored reads
   result.total_reads = uint(len(reads))
   for tread in reads:
     result.sum_str_counts += tread.repeat_count
   result.allele2_bp = anchored_lm(result.sum_str_counts, depth)
+
+proc unplaced_est(unplaced_count: int, depth: float): float =
+  # Estimate size in bp using number of unplaced reads
+  var cofficient = 1.066674
+  var intercept = 8.029485
+  var y = log2(float(unplaced_count)/depth + 1) * cofficient + intercept
+  result = pow(2,y)
 
 proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
               targets: seq[Target], depth: float): Call =
@@ -153,3 +161,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
 
   # Revise allele esimates using unplaced reads
   # (probably can't be done until all loci are genotyped)
+proc update_genotype*(call: var Call, unplaced_reads: int) =
+  var RUlen = len(call.repeat)
+  call.unplaced_reads = unplaced_reads
+  call.allele2 = unplaced_est(unplaced_reads, call.depth)/float(RUlen)
