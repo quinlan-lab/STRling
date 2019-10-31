@@ -186,12 +186,14 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
       A.position = B.position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
 
     A.tid = B.tid
+    A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
     if A.flag.should_reverse:
       A.repeat.min_rev_complement
 
   # A is STR, A is mapped well
   elif A.mapping_quality >= opts.min_mapq or A.flag.proper_pair:
     A.position += uint32(A.align_length.float / 2'f + 0.5) # Record position as middle of A
+    A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
 
 # Return true if both reads in pair are STR, or one is STR, one low mapping qual
 proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
@@ -204,7 +206,7 @@ proc unplaced_pair*(A:var tread, B:tread, opts:Options): bool =
 
   return false
 
-proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]], counts: var Seqs[uint8], opts:Options) =
+proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]], counts: var Seqs[uint8], opts:var Options) =
   doAssert not (aln.flag.secondary or aln.flag.supplementary)
 
   # Check if you have both reads
@@ -215,8 +217,16 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
     # get mates together and see what, if anything should be added to the final
     # cache.
 
+    # set the aln qual so that it transfers to soft and self
+    aln.b.core.qual = max(aln.mapping_quality, mate.mapping_quality)
     var self = aln.to_tread(genome_str, counts, opts)
+    # drop the proportion_repeat for the soft-clipped portion as it
+    # often has imperfect repeats.
+    var b = opts.proportion_repeat
+    opts.proportion_repeat -= 0.07
     cache.add_soft(aln, counts, opts, self.repeat)
+    # then set it back
+    opts.proportion_repeat = b
     if mate.repeat_count == 0'u8 and self.repeat_count == 0: return
 
     # If both reads in pair are STR, or one is STR, one low mapping qual, set position to unknown
@@ -243,7 +253,10 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
 
   else:
     var tr = aln.to_tread(genome_str, counts, opts)
+    var b = opts.proportion_repeat
+    opts.proportion_repeat -= 0.07
     cache.add_soft(aln, counts, opts, tr.repeat)
+    opts.proportion_repeat = b
     if cache.tbl.hasKeyOrPut(aln.qname, tr):
       stderr.write_line "[str] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
       var mate:tread

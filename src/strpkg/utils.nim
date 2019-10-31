@@ -179,7 +179,7 @@ proc reduce_repeat*(rep: var array[6, char]): int =
   ## CCC to C is 1.
   result = 1
   if rep[0] == '\0': return
-  var seen = rep[0]
+  let seen = rep[0]
   for i in 1..<rep.len:
     if rep[i] == '\0': break
     if rep[i] != seen: return
