@@ -268,7 +268,6 @@ proc extract_main*() =
     option("-f", "--fasta", help="path to fasta file (required for CRAM)")
     option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
-    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
@@ -285,7 +284,6 @@ proc extract_main*() =
 
   var ibam:Bam
   var proportion_repeat = parseFloat(args.proportion_repeat)
-  var min_support = parseInt(args.min_support)
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
 
@@ -315,7 +313,7 @@ proc extract_main*() =
 
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
-                      min_support: min_support, min_mapq: min_mapq)
+                      min_mapq: min_mapq)
   var nreads = 0
   var genome_str = genome_repeats(args.fasta, opts, args.genome_repeats)
 
@@ -343,7 +341,7 @@ proc extract_main*() =
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
     quit "[str] couldnt open binary output file"
-  # TODO: write min_mapq, min_support, proportion repeat to start of bin file
+  # TODO: write min_mapq, proportion repeat to start of bin file
   for c in cache.cache:
     fs.pack(c)
   fs.close
