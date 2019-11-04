@@ -85,6 +85,7 @@ proc call_main*() =
   while not fs.atEnd:
     var t:tread
     fs.unpack(t)
+    echo t
     cache.cache.add(t)
   stderr.write_line &"[str] read {cache.cache.len} treads from bin file"
 

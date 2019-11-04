@@ -215,25 +215,31 @@ proc reduce_repeat*(rep: var array[6, char]): int =
     rep[i] = '\0'
 
 # This is the bottleneck for run time at the moment
-proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
+proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options, debug:bool=false): array[6, char] =
   repeat_count = 0
   if read.count('N') > 20: return
   var s = newString(6)
 
   var best_score: int = -1
   for k in 2..6:
-    let count = read.count(k, counts[k])
+    var count = read.count(k, counts[k])
+    s = newString(k)
+    counts[k].argmax.decode(s)
     var score = count * k
+    if debug:
+      echo k, " ", score, " ", s, " actual count:", read.count(s), " est count:", count
     if score <= best_score:
       if count < (read.len.float * 0.12 / k.float).int:
         break
       continue
+    count = read.count(s)
+    score = count * k
+    if score < best_score: continue
+
     best_score = score
     if count > (read.len.float * opts.proportion_repeat / k.float).int:
       # now check the actual string because the kmer method can't track phase
-      s = newString(k)
-      counts[k].argmax.decode(s)
-      if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
+      if count >= (read.len.float * opts.proportion_repeat / k.float).int:
         copyMem(result.addr, s[0].addr, k)
         repeat_count = count
         if repeat_count > 0 and result[0] == '\0':

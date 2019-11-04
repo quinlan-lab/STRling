@@ -48,7 +48,11 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
       read = read[0..<read.len-aln.cigar[L-1].len]
       align_length -= aln.cigar[L-1].len
 
-  result = read.get_repeat(counts, repeat_count, opts)
+
+  result = read.get_repeat(counts, repeat_count, opts, aln.qname == "HG3YMALXX170331:1:1206:12368:37049")
+  if aln.qname == "HG3YMALXX170331:1:1206:12368:37049":
+    echo read
+    echo result
 
 proc tostring*(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -150,7 +154,7 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
   # A is very repetitive and B is not very repetitive
   # A is mapped poorly, B is mapped well and it's not a proper pair
   # TODO: use opts.$param for 0.7 and 0.2
-  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.7 and B.p_repeat < 0.2 and B.mapping_quality > 50) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
+  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.7 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
     # B is right of A, so the position subtracts th fragment length
     # Note fragment size is the external distance
     if B.flag.reverse:
@@ -197,12 +201,11 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
     # cache.
 
     # set the aln qual so that it transfers to soft and self
-    aln.b.core.qual = max(aln.mapping_quality, mate.mapping_quality)
     var self = aln.to_tread(genome_str, counts, opts)
     # drop the proportion_repeat for the soft-clipped portion as it
     # often has imperfect repeats.
     var b = opts.proportion_repeat
-    opts.proportion_repeat -= 0.07
+    opts.proportion_repeat = min(b, 0.6)
     cache.add_soft(aln, counts, opts, self.repeat)
     # then set it back
     opts.proportion_repeat = b
