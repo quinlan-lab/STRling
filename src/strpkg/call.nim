@@ -108,7 +108,10 @@ proc call_main*() =
 
   var window = frag_dist.median(0.98)
 
-  reads_fh.write_line "#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
+  var qname = ""
+  when defined(qname):
+    qname = "\tqname"
+  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count{qname}\tcluster_id" # print header
   gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\ttotal_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
 
 

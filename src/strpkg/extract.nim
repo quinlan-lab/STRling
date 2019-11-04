@@ -107,7 +107,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
     var c = aln.cigar[cig_index]
     if c.op != CigarOp.soft_clip: continue
 
-    if read_repeat[0] == 0.char and c.len < 20: continue
+    if read_repeat[0] == 0.char and c.len <= 16: continue
 
     aln.sequence(soft_seq)
     if cig_index == 0:
@@ -149,8 +149,8 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
   # when B has hi mapping quality, we adjust A if:
   # A is very repetitive and B is not very repetitive
   # A is mapped poorly, B is mapped well and it's not a proper pair
-  # TODO: use opts.$param for 0.9 and 0.2
-  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.9 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
+  # TODO: use opts.$param for 0.7 and 0.2
+  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.7 and B.p_repeat < 0.2 and B.mapping_quality > 50) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
     # B is right of A, so the position subtracts th fragment length
     # Note fragment size is the external distance
     if B.flag.reverse:
