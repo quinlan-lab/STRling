@@ -11,12 +11,18 @@ iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
   var base: char
   for i in countup(0, s.high - k + 1, k):
+    #stdout.write "s:", s[i..<i+k], " "
     var f = s[i..<i+k].encode()
     var kmin = f
-    for j in 0..<k:
+    var jmin = 0
+
+    for j in 1..<k:
       base = s[i + j]
       f.forward_add(base, k)
-      kmin = min(kmin, f)
+      if f < kmin:
+        kmin = f
+        jmin = j
+    #stdout.write "i:", i, " -> ", jmin, "\n"
     yield kmin
 {.pop.}
 
