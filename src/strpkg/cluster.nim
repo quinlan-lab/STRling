@@ -286,7 +286,7 @@ iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads
     var reps: seq[tread] = group.v
 
     if reps[0].tid < 0:
-      stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
+      #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
       yield Cluster(reads: reps)
       continue
 
