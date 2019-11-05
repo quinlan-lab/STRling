@@ -1,6 +1,19 @@
 [![Build Status](https://travis-ci.org/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.org/quinlan-lab/STRling)
 
-## Install from source
+STRling is still in development. Please report bugs via GitHub issues.
+
+STRling (pronounced like “sterling”) is a method to detect large STR expansions from short-read sequencing data. It is capable of detecting novel STR expansions, that is expansions where there is no STR in the reference genome at that position (or a different repeat unit from what is in the reference). It can also detect STR expansions that are annotated in the reference genome. STRling uses kmer counting to recover mis-mapped STR reads. It then uses soft-clipped reads to precisely discover the position of the STR expansion in the reference genome.
+
+## Install
+
+We recommending downloading the static binary.
+
+Download `strling` from the latest release from [here](https://github.com/quinlan-lab/STRling/releases/latest).
+
+Make it executable:  
+`chmod +x strling`
+
+### Install from source
 
 Install nim:  
 `curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh && sh init.sh`
@@ -14,7 +27,7 @@ nimble install
 
 Compile options for development:  
 
-Compile in fast mode (danger) with read names reported:  
+Compile in fast mode (danger):  
 `nim c -d:danger -d:release src/strling.nim`
 
 ## Run
@@ -39,8 +52,8 @@ The main output file is `{$prefix}-genotype.txt`. It reports all STR expansion l
 - left: predicted left boundry of STR locus
 - right: predicted right boundry of STR locus
 - repeatunit: predicted STR repeat unit
-- allele1\_est: estimated size of the shorter allele supported by spanning reads (if any)
-- allele2\_est: estimated size of the larger allele supported by anchored reads
+- allele1\_est: estimated size of the shorter allele in repeat units, from spanning reads (if any)
+- allele2\_est: estimated size of the larger allele in repeat units, from anchored reads
 - total\_reads: number of reads supporting an expansion at this locus
 - spanning\_reads: number of reads that span the locus
 - spanning\_pairs: number of read pairs that span the locus
@@ -54,7 +67,7 @@ Some additional outputs are provided with detailed supporting evidence used to m
 - Putative str bounds: `{$prefix}-bounds.txt`
 - All str-like reads: `{$prefix}-reads.txt`
 - Spanning reads and spanning pairs:`{$prefix}-spanning.txt`
-- Counts of str-like reads that are unplaced (could not be assigned to a locus): '{$prefix}-unplaced.txt`
+- Counts of str-like reads that are unplaced (could not be assigned to a locus): `{$prefix}-unplaced.txt`
 
 
 ## Run tests
