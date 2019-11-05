@@ -69,7 +69,7 @@ proc min_rev_complement*(repeat: var array[6, char]) {.inline.} =
     s.add(c)
   s = s.reverse_complement
   let l = s.len
-  s.add(s)
+  s = s & s
   var mv = uint64(0) - 1'u64
   for m in s.slide_by(l):
     if m < mv:
@@ -277,18 +277,30 @@ proc get_chrom*(tid:int, targets: seq[Target]): string =
     if t.tid == tid:
       return t.name
 
+proc `<`(a: array[6, char], b: array[6, char]): bool {.inline.} =
+  if a[0] != b[0]:
+    return a[0] < b[0]
+  if a[1] != b[1]:
+    return a[1] < b[1]
+  if a[2] != b[2]:
+    return a[2] < b[2]
+  if a[3] != b[3]:
+    return a[3] < b[3]
+  if a[4] != b[4]:
+    return a[4] < b[4]
+  return a[5] < b[5]
+
 proc canonical_repeat*(repeat: array[6, char]): array[6, char] =
-  var rev = repeat
-  rev.min_rev_complement
-  var first = @[repeat.tostring, rev.tostring].sorted[0]
-  for i in 0..len(first) - 1:
-    result[i] = first[i]
+  for i in 0..<6:
+    result[i] = repeat[i]
+  result.min_rev_complement
+  if result < repeat:
+    return
+  return repeat
 
 proc canonical_repeat*(repeat: string): string =
   var forward = ['\0', '\0', '\0', '\0', '\0', '\0']
-  for i in 0..len(repeat) - 1:
+  for i in 0..<len(repeat):
     forward[i] = repeat[i]
-  var rev = forward
-  rev.min_rev_complement
-  result = @[forward.tostring, rev.tostring].sorted[0]
+  result = forward.canonical_repeat.tostring
 
