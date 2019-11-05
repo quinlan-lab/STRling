@@ -126,7 +126,6 @@ proc call_main*() =
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
-      unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
       continue
     if c.reads.len >= uint16.high.int:
@@ -204,6 +203,9 @@ proc call_main*() =
     else:
       for gt in genotypes:
         gt_fh.write_line gt.tostring()
+
+  for repeat, count in unplaced_counts:
+      unplaced_fh.write_line &"{repeat}\t{count}"
 
   gt_fh.close
   reads_fh.close
