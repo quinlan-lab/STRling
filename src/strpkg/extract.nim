@@ -301,7 +301,7 @@ proc extract_main*() =
   var tid = -1
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
-    if aln.tid != tid:
+    if aln.tid != tid and aln.tid >= 0:
       if ibam.hdr.targets[aln.tid].length > 2_000_000'u32:
         stderr.write_line "[strling] extracting chromosome:", $aln.chrom
       tid = aln.tid
@@ -315,18 +315,21 @@ proc extract_main*() =
 
     cache.add(aln, genome_str, counts, opts)
 
+  stderr.write_line "[strling] extracting unampped reads"
   # get unmapped reads
   for aln in ibam.query("*"):
     if aln.flag.secondary or aln.flag.supplementary: continue
     nreads.inc
     cache.add(aln, genome_str, counts, opts)
 
+  stderr.write_line "[strling] writing binary file:", args.bin
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
     quit "[strling] couldnt open binary output file"
   # TODO: write min_mapq, proportion repeat to start of bin file
   for c in cache.cache:
     fs.pack(c)
+  stderr.write_line "[strling] finished extraction"
   fs.close
 
   ibam.close
