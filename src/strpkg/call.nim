@@ -86,7 +86,7 @@ proc call_main*() =
     var t:tread
     fs.unpack(t)
     cache.cache.add(t)
-  stderr.write_line &"[str] read {cache.cache.len} treads from bin file"
+  stderr.write_line &"[strling] read {cache.cache.len} treads from bin file"
 
   ### discovery
   var

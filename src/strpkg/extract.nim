@@ -240,7 +240,7 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
     cache.add_soft(aln, counts, opts, tr.repeat)
     opts.proportion_repeat = b
     if cache.tbl.hasKeyOrPut(aln.qname, tr):
-      stderr.write_line "[str] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+      stderr.write_line "[strling] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
       var mate:tread
       discard cache.tbl.take(aln.qname, mate)
 
@@ -301,7 +301,7 @@ proc extract_main*() =
 
   var t0 = cpuTime()
   var counts = init[uint8]()
-  stderr.write_line "[str] collecting str-like reads"
+  stderr.write_line "[strling] collecting str-like reads"
   var tid = -1
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
@@ -327,7 +327,7 @@ proc extract_main*() =
 
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
-    quit "[str] couldnt open binary output file"
+    quit "[strling] couldnt open binary output file"
   # TODO: write min_mapq, proportion repeat to start of bin file
   for c in cache.cache:
     fs.pack(c)

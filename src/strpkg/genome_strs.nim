@@ -118,7 +118,7 @@ proc genome_repeats*(fai:Fai, opts:Options, bed_path:string): TableRef[string, L
   if not fileExists(bed_path):
     var fh:File
     if not fh.open(bed_path, fmWrite):
-      quit &"[str] couldn't open bed file: {bed_path} for writing"
+      quit &"[strling] couldn't open bed file: {bed_path} for writing"
     let window_size: int = 100
     let step: int = 60
     var n = 0
@@ -126,19 +126,19 @@ proc genome_repeats*(fai:Fai, opts:Options, bed_path:string): TableRef[string, L
       fh.write_line(&"{w.chrom}\t{w.start}\t{w.stop}\t{w.repeat}")
       n += 1
     fh.close
-    stderr.write_line &"[str] found {n} STR-like regions in the genome"
+    stderr.write_line &"[strling] found {n} STR-like regions in the genome"
   else:
-    stderr.write_line &"[str] using existing file {bed_path} for genome repeats"
+    stderr.write_line &"[strling] using existing file {bed_path} for genome repeats"
 
   result = read_bed(bed_path)
-  stderr.write_line &"[str] got STR repeats from genome into an interval tree"
+  stderr.write_line &"[strling] got STR repeats from genome into an interval tree"
   if isTmp:
     removeFile(bed_path)
 
 proc genome_repeats*(fasta:string, opts:Options, bed_path:string): TableRef[string, Lapper[region]] =
   var fai:Fai
   if not fai.open(fasta):
-    quit &"[str] couldn't open fasta {fasta} make sure file is present and has a .fai index"
+    quit &"[strling] couldn't open fasta {fasta} make sure file is present and has a .fai index"
   result = fai.genome_repeats(opts, bed_path)
 
 
@@ -185,7 +185,7 @@ proc genome_main*() =
 
   var fai:Fai
   if not fai.open(args.fasta):
-    quit &"[str] couldn't open fasta {args.fasta} make sure file is present and has a .fai index"
+    quit &"[strling] couldn't open fasta {args.fasta} make sure file is present and has a .fai index"
 
   var opts = Options(proportion_repeat: parseFloat(args.proportion_repeat))
   discard fai.genome_repeats(opts, args.bed)
