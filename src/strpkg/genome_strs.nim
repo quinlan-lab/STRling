@@ -36,7 +36,7 @@ proc trim(w:var Window, dna:string): Window =
     if expected != enc: w.start += w.repeat.len
     else: break
 
-  doAssert w.start < w.stop, &"repeat {w.repeat} not found in expected region for {ow}, {dna}"
+  doAssert w.start < w.stop, &"repeat {w.repeat} not found in expected region for {ow}, {dna}, {w}"
 
   # trim right
   var dnar = newString(dna.len)
@@ -63,11 +63,12 @@ iterator repeat_windows(fai:Fai, window_size:int, step:int, opts:Options): Windo
   var repeat_count:int
   for tid in 0..<fai.len:
     var chrom = fai[tid]
-    stderr.write_line &"[str] on chromosome: {chrom}"
     var start = 0
     var L = fai.chrom_len(chrom)
+    if L > 2_000_000:
+      stderr.write_line &"[strling] finding STR regions on reference chromosome: {chrom}"
     var last_w = Window(stop: -1)
-    var chrom_seq = fai.get(chrom)
+    var chrom_seq = fai.get(chrom).toUpperAscii
     shallow(chrom_seq)
     while start < L:
       var dna = chrom_seq[start..<min(L, start + window_size)]
@@ -120,11 +121,12 @@ proc genome_repeats*(fai:Fai, opts:Options, bed_path:string): TableRef[string, L
       quit &"[str] couldn't open bed file: {bed_path} for writing"
     let window_size: int = 100
     let step: int = 60
-
-
+    var n = 0
     for w in fai.repeat_windows(window_size, step, opts):
       fh.write_line(&"{w.chrom}\t{w.start}\t{w.stop}\t{w.repeat}")
+      n += 1
     fh.close
+    stderr.write_line &"[str] found {n} STR-like regions in the genome"
   else:
     stderr.write_line &"[str] using existing file {bed_path} for genome repeats"
 

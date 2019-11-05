@@ -9,7 +9,7 @@ import algorithm
 {.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
-  if k < s.len:
+  if k <= s.len:
     var base: char
     var f = s[0..<k].encode
     var kmin = f

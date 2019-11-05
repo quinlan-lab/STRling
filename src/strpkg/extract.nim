@@ -28,7 +28,7 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
   # we have an exact match to the reference.
   if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match and aln.chrom in genome_str:
     var empty: seq[region]
-    if not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
+    if aln.chrom notin genome_str or not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
       align_length = aln.cigar[0].len
       return
 
@@ -49,10 +49,8 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
       align_length -= aln.cigar[L-1].len
 
 
-  result = read.get_repeat(counts, repeat_count, opts, aln.qname == "HG3YMALXX170331:1:1206:12368:37049")
-  if aln.qname == "HG3YMALXX170331:1:1206:12368:37049":
-    echo read
-    echo result
+  result = read.get_repeat(counts, repeat_count, opts, false)
+
 
 proc tostring*(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -308,7 +306,8 @@ proc extract_main*() =
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
     if aln.tid != tid:
-      stderr.write_line "[str] extracting chromosome:", $aln.chrom
+      if ibam.hdr.targets[aln.tid].length > 2_000_000'u32:
+        stderr.write_line "[strling] extracting chromosome:", $aln.chrom
       tid = aln.tid
 
     nreads.inc
