@@ -108,10 +108,7 @@ proc call_main*() =
 
   var window = frag_dist.median(0.98)
 
-  var qname = ""
-  when defined(qname):
-    qname = "\tqname"
-  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count{qname}\tcluster_id" # print header
+  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
   gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\ttotal_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
 
 
@@ -129,7 +126,6 @@ proc call_main*() =
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
-      unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
       continue
     if c.reads.len >= uint16.high.int:
@@ -208,6 +204,9 @@ proc call_main*() =
       for gt in genotypes:
         gt_fh.write_line gt.tostring()
 
+  for repeat, count in unplaced_counts:
+      unplaced_fh.write_line &"{repeat}\t{count}"
+
   gt_fh.close
   reads_fh.close
   bounds_fh.close
@@ -215,11 +214,13 @@ proc call_main*() =
   unplaced_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
+    stderr.write_line &"Supporting evidence used to make the genotype calls:"
+    stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
+    stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
+    stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
+    stderr.write_line &"wrote counts of unplaced reads with STR content to {args.output_prefix}-unplaced.txt"
+    stderr.write_line &"Main results file:"
     stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
-    stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
-    stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
-    stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"
-    stderr.write_line &"wrote counts of unplaced fragments with STR content to {args.output_prefix}-unplaced.txt"
 
 when isMainModule:
   when not defined(danger):

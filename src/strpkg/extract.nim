@@ -58,9 +58,7 @@ proc tostring*(t:tread, targets: seq[Target]): string =
   for v in t.repeat:
     if v == 0.char: continue
     rep.add(v)
-  result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
-  when defined(debug) or defined(qname):
-    result &= "\t" & t.qname
+  result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}	{t.qname}"""
 
 proc repeat_length(t:tread): uint8 {.inline.} =
   for v in t.repeat:
@@ -88,9 +86,8 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
                  repeat_count: repeat_count.uint8,
                  align_length: align_length.uint8,
                  split: Soft.none,
-                 mapping_quality: aln.mapping_quality)
-  when defined(debug) or defined(qname):
-    result.qname = aln.qname
+                 mapping_quality: aln.mapping_quality,
+                 qname: aln.qname)
 
 type Cache* = object
   tbl*: TableRef[string, tread]
@@ -130,10 +127,9 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
                   repeat_count: repeat_count.uint8,
                   align_length: soft_seq.len.uint8,
                   split: if cig_index == 0: Soft.left else: Soft.right,
-                  mapping_quality: aln.mapping_quality
+                  mapping_quality: aln.mapping_quality,
+                  qname: aln.qname
                   ))
-    when defined(debug) or defined(qname):
-      cache.cache[cache.cache.high].qname = aln.qname
 
 proc should_reverse(f:Flag): bool {.inline.} =
   ## this is only  called after we've ensured hi-quality of mate and lo-quality
