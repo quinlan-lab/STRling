@@ -13,38 +13,25 @@ iterator slide_by*(s:string, k: int): uint64 {.inline.} =
     var base: char
     var f = s[0..<k].encode
     var kmin = f
+    # note that we are just rotating the kmer here, not adding new bases
     for j in 0..<k:
         base = s[j]
         f.forward_add(base, k)
         kmin = min(f, kmin)
     yield kmin
 
+    # after the first k, then we can use the forward add of k bases
+    # to get to the next encode
     for i in countup(k, s.high - k + 1, k):
       for m in 0..<k:
         f.forward_add(s[i + m], k)
       kmin = f
+      # then rotate the kmer
       for j in 0..<k:
           base = s[i + j]
           f.forward_add(base, k)
           kmin = min(f, kmin)
       yield kmin
-
-
-
-
-   #[ this is the old, slower version where we .encode() every k bases instead
-   #of using forward add.
-
-  for i in countup(0, s.high - k + 1, k):
-    var f = s[i..<i+k].encode()
-    var kmin = f
-
-    for j in 0..<k:
-      base = s[i + j]
-      f.forward_add(base, k)
-      kmin = min(f, kmin)
-    yield kmin
-    ]#
 {.pop.}
 
 proc complement*(s:char): char {.inline.} =
