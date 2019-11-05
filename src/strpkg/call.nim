@@ -212,11 +212,13 @@ proc call_main*() =
   unplaced_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
+    stderr.write_line &"Supporting evidence used to make the genotype calls:"
+    stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
+    stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
+    stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
+    stderr.write_line &"wrote counts of unplaced reads with STR content to {args.output_prefix}-unplaced.txt"
+    stderr.write_line &"Main results file:"
     stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
-    stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
-    stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
-    stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"
-    stderr.write_line &"wrote counts of unplaced fragments with STR content to {args.output_prefix}-unplaced.txt"
 
 when isMainModule:
   when not defined(danger):
