@@ -25,8 +25,7 @@ type tread* = object
   mapping_quality*: uint8
   repeat_count*: uint8
   align_length*: uint8
-  when defined(debug) or defined(qname):
-    qname*: string
+  qname*: string
 
 proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.tid)
@@ -38,12 +37,9 @@ proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.repeat_count)
   s.pack(x.align_length)
   var L:uint32 = 0
-  when defined(debug) or defined(qname):
-    L = x.qname.len.uint32
-    s.pack(L)
-    s.pack(x.qname)
-  else:
-    s.pack(L)
+  L = x.qname.len.uint32
+  s.pack(L)
+  s.pack(x.qname)
 
 proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
   s.unpack(x.tid)
@@ -64,8 +60,7 @@ proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
   qname = newString(L)
   if L > 0'u32:
     s.unpack(qname)
-  when defined(debug) or defined(qname):
-    x.qname = qname
+  x.qname = qname
 
 
 type Cluster* = object

@@ -15,7 +15,7 @@ nimble install
 Compile options for development:  
 
 Compile in fast mode (danger) with read names reported:  
-`nim c -d:danger -d:qname src/strling.nim`
+`nim c -d:danger -d:release src/strling.nim`
 
 ## Run
 
