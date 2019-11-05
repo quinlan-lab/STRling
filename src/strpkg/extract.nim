@@ -303,9 +303,13 @@ proc extract_main*() =
 
   var t0 = cpuTime()
   var counts = init[uint8]()
-  stderr.write_line "collecting str-like reads"
+  stderr.write_line "[str] collecting str-like reads"
+  var tid = -1
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
+    if aln.tid != tid:
+      stderr.write_line "[str] extracting chromosome:", $aln.chrom
+      tid = aln.tid
 
     nreads.inc
 

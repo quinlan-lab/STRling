@@ -9,21 +9,42 @@ import algorithm
 {.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
-  var base: char
+  if k < s.len:
+    var base: char
+    var f = s[0..<k].encode
+    var kmin = f
+    for j in 0..<k:
+        base = s[j]
+        f.forward_add(base, k)
+        kmin = min(f, kmin)
+    yield kmin
+
+    for i in countup(k, s.high - k + 1, k):
+      for m in 0..<k:
+        f.forward_add(s[i + m], k)
+      kmin = f
+      for j in 0..<k:
+          base = s[i + j]
+          f.forward_add(base, k)
+          kmin = min(f, kmin)
+      yield kmin
+
+
+
+
+   #[ this is the old, slower version where we .encode() every k bases instead
+   #of using forward add.
+
   for i in countup(0, s.high - k + 1, k):
-    #stdout.write "s:", s[i..<i+k], " "
     var f = s[i..<i+k].encode()
     var kmin = f
-    var jmin = 0
 
-    for j in 1..<k:
+    for j in 0..<k:
       base = s[i + j]
       f.forward_add(base, k)
-      if f < kmin:
-        kmin = f
-        jmin = j
-    #stdout.write "i:", i, " -> ", jmin, "\n"
+      kmin = min(f, kmin)
     yield kmin
+    ]#
 {.pop.}
 
 proc complement*(s:char): char {.inline.} =
