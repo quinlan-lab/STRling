@@ -28,7 +28,7 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
   # we have an exact match to the reference.
   if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match and aln.chrom in genome_str:
     var empty: seq[region]
-    if not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
+    if aln.chrom notin genome_str or not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
       align_length = aln.cigar[0].len
       return
 
@@ -48,7 +48,9 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
       read = read[0..<read.len-aln.cigar[L-1].len]
       align_length -= aln.cigar[L-1].len
 
-  result = read.get_repeat(counts, repeat_count, opts)
+
+  result = read.get_repeat(counts, repeat_count, opts, false)
+
 
 proc tostring*(t:tread, targets: seq[Target]): string =
   var chrom = if t.tid == -1: "unknown" else: targets[t.tid].name
@@ -56,9 +58,7 @@ proc tostring*(t:tread, targets: seq[Target]): string =
   for v in t.repeat:
     if v == 0.char: continue
     rep.add(v)
-  result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}"""
-  when defined(debug) or defined(qname):
-    result &= "\t" & t.qname
+  result = &"""{chrom}	{t.position}	{rep}	{t.split}	{t.repeat_count}	{t.qname}"""
 
 proc repeat_length(t:tread): uint8 {.inline.} =
   for v in t.repeat:
@@ -86,9 +86,8 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
                  repeat_count: repeat_count.uint8,
                  align_length: align_length.uint8,
                  split: Soft.none,
-                 mapping_quality: aln.mapping_quality)
-  when defined(debug) or defined(qname):
-    result.qname = aln.qname
+                 mapping_quality: aln.mapping_quality,
+                 qname: aln.qname)
 
 type Cache* = object
   tbl*: TableRef[string, tread]
@@ -107,7 +106,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
     var c = aln.cigar[cig_index]
     if c.op != CigarOp.soft_clip: continue
 
-    if read_repeat[0] == 0.char and c.len < 20: continue
+    if read_repeat[0] == 0.char and c.len <= 16: continue
 
     aln.sequence(soft_seq)
     if cig_index == 0:
@@ -128,10 +127,9 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
                   repeat_count: repeat_count.uint8,
                   align_length: soft_seq.len.uint8,
                   split: if cig_index == 0: Soft.left else: Soft.right,
-                  mapping_quality: aln.mapping_quality
+                  mapping_quality: aln.mapping_quality,
+                  qname: aln.qname
                   ))
-    when defined(debug) or defined(qname):
-      cache.cache[cache.cache.high].qname = aln.qname
 
 proc should_reverse(f:Flag): bool {.inline.} =
   ## this is only  called after we've ensured hi-quality of mate and lo-quality
@@ -149,8 +147,8 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
   # when B has hi mapping quality, we adjust A if:
   # A is very repetitive and B is not very repetitive
   # A is mapped poorly, B is mapped well and it's not a proper pair
-  # TODO: use opts.$param for 0.9 and 0.2
-  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.9 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
+  # TODO: use opts.$param for 0.7 and 0.2
+  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.7 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
     # B is right of A, so the position subtracts th fragment length
     # Note fragment size is the external distance
     if B.flag.reverse:
@@ -197,12 +195,11 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
     # cache.
 
     # set the aln qual so that it transfers to soft and self
-    aln.b.core.qual = max(aln.mapping_quality, mate.mapping_quality)
     var self = aln.to_tread(genome_str, counts, opts)
     # drop the proportion_repeat for the soft-clipped portion as it
     # often has imperfect repeats.
     var b = opts.proportion_repeat
-    opts.proportion_repeat -= 0.07
+    opts.proportion_repeat = min(b, 0.6)
     cache.add_soft(aln, counts, opts, self.repeat)
     # then set it back
     opts.proportion_repeat = b
@@ -239,7 +236,7 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
     cache.add_soft(aln, counts, opts, tr.repeat)
     opts.proportion_repeat = b
     if cache.tbl.hasKeyOrPut(aln.qname, tr):
-      stderr.write_line "[str] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
+      stderr.write_line "[strling] warning. bad read (this happens with bwa-kit alignments):" & aln.qname & " already in table as:" & $cache.tbl[aln.qname]
       var mate:tread
       discard cache.tbl.take(aln.qname, mate)
 
@@ -300,9 +297,14 @@ proc extract_main*() =
 
   var t0 = cpuTime()
   var counts = init[uint8]()
-  stderr.write_line "collecting str-like reads"
+  stderr.write_line "[strling] collecting str-like reads"
+  var tid = -1
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
+    if aln.tid != tid and aln.tid >= 0:
+      if ibam.hdr.targets[aln.tid].length > 2_000_000'u32:
+        stderr.write_line "[strling] extracting chromosome:", $aln.chrom
+      tid = aln.tid
 
     nreads.inc
 
@@ -313,18 +315,21 @@ proc extract_main*() =
 
     cache.add(aln, genome_str, counts, opts)
 
+  stderr.write_line "[strling] extracting unampped reads"
   # get unmapped reads
   for aln in ibam.query("*"):
     if aln.flag.secondary or aln.flag.supplementary: continue
     nreads.inc
     cache.add(aln, genome_str, counts, opts)
 
+  stderr.write_line "[strling] writing binary file:", args.bin
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
-    quit "[str] couldnt open binary output file"
+    quit "[strling] couldnt open binary output file"
   # TODO: write min_mapq, proportion repeat to start of bin file
   for c in cache.cache:
     fs.pack(c)
+  stderr.write_line "[strling] finished extraction"
   fs.close
 
   ibam.close

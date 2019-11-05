@@ -36,7 +36,7 @@ proc trim(w:var Window, dna:string): Window =
     if expected != enc: w.start += w.repeat.len
     else: break
 
-  doAssert w.start < w.stop, &"repeat {w.repeat} not found in expected region for {ow}, {dna}"
+  doAssert w.start < w.stop, &"repeat {w.repeat} not found in expected region for {ow}, {dna}, {w}"
 
   # trim right
   var dnar = newString(dna.len)
@@ -63,11 +63,12 @@ iterator repeat_windows(fai:Fai, window_size:int, step:int, opts:Options): Windo
   var repeat_count:int
   for tid in 0..<fai.len:
     var chrom = fai[tid]
-    stderr.write_line &"[str] on chromosome: {chrom}"
     var start = 0
     var L = fai.chrom_len(chrom)
+    if L > 2_000_000:
+      stderr.write_line &"[strling] finding STR regions on reference chromosome: {chrom}"
     var last_w = Window(stop: -1)
-    var chrom_seq = fai.get(chrom)
+    var chrom_seq = fai.get(chrom).toUpperAscii
     shallow(chrom_seq)
     while start < L:
       var dna = chrom_seq[start..<min(L, start + window_size)]
@@ -117,26 +118,27 @@ proc genome_repeats*(fai:Fai, opts:Options, bed_path:string): TableRef[string, L
   if not fileExists(bed_path):
     var fh:File
     if not fh.open(bed_path, fmWrite):
-      quit &"[str] couldn't open bed file: {bed_path} for writing"
+      quit &"[strling] couldn't open bed file: {bed_path} for writing"
     let window_size: int = 100
     let step: int = 60
-
-
+    var n = 0
     for w in fai.repeat_windows(window_size, step, opts):
       fh.write_line(&"{w.chrom}\t{w.start}\t{w.stop}\t{w.repeat}")
+      n += 1
     fh.close
+    stderr.write_line &"[strling] found {n} STR-like regions in the genome"
   else:
-    stderr.write_line &"[str] using existing file {bed_path} for genome repeats"
+    stderr.write_line &"[strling] using existing file {bed_path} for genome repeats"
 
   result = read_bed(bed_path)
-  stderr.write_line &"[str] got STR repeats from genome into an interval tree"
+  stderr.write_line &"[strling] got STR repeats from genome into an interval tree"
   if isTmp:
     removeFile(bed_path)
 
 proc genome_repeats*(fasta:string, opts:Options, bed_path:string): TableRef[string, Lapper[region]] =
   var fai:Fai
   if not fai.open(fasta):
-    quit &"[str] couldn't open fasta {fasta} make sure file is present and has a .fai index"
+    quit &"[strling] couldn't open fasta {fasta} make sure file is present and has a .fai index"
   result = fai.genome_repeats(opts, bed_path)
 
 
@@ -183,7 +185,7 @@ proc genome_main*() =
 
   var fai:Fai
   if not fai.open(args.fasta):
-    quit &"[str] couldn't open fasta {args.fasta} make sure file is present and has a .fai index"
+    quit &"[strling] couldn't open fasta {args.fasta} make sure file is present and has a .fai index"
 
   var opts = Options(proportion_repeat: parseFloat(args.proportion_repeat))
   discard fai.genome_repeats(opts, args.bed)

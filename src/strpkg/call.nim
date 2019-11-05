@@ -24,8 +24,8 @@ proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
-    option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="2")
-    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="5")
+    option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
+    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="1")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
@@ -86,7 +86,7 @@ proc call_main*() =
     var t:tread
     fs.unpack(t)
     cache.cache.add(t)
-  stderr.write_line &"[str] read {cache.cache.len} treads from bin file"
+  stderr.write_line &"[strling] read {cache.cache.len} treads from bin file"
 
   ### discovery
   var
@@ -108,7 +108,11 @@ proc call_main*() =
 
   var window = frag_dist.median(0.98)
 
-  reads_fh.write_line "chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
+  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
+  gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\ttotal_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
+
+
+
   var targets = ibam.hdr.targets
 
   var loci: seq[Bounds]
@@ -122,7 +126,6 @@ proc call_main*() =
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
-      unplaced_fh.write_line &"{c.reads[0].repeat.tostring}\t{c.reads.len}"
       unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
       continue
     if c.reads.len >= uint16.high.int:
@@ -201,6 +204,9 @@ proc call_main*() =
       for gt in genotypes:
         gt_fh.write_line gt.tostring()
 
+  for repeat, count in unplaced_counts:
+      unplaced_fh.write_line &"{repeat}\t{count}"
+
   gt_fh.close
   reads_fh.close
   bounds_fh.close
@@ -208,11 +214,13 @@ proc call_main*() =
   unplaced_fh.close
   if args.verbose:
     stderr.write_line cache.tbl.len, " left in table"
+    stderr.write_line &"Supporting evidence used to make the genotype calls:"
+    stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
+    stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
+    stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
+    stderr.write_line &"wrote counts of unplaced reads with STR content to {args.output_prefix}-unplaced.txt"
+    stderr.write_line &"Main results file:"
     stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
-    stderr.write_line &"wrote bounds to {args.output_prefix}-bounds.txt"
-    stderr.write_line &"wrote reads to {args.output_prefix}-reads.txt"
-    stderr.write_line &"wrote spanners to {args.output_prefix}-spanning.txt"
-    stderr.write_line &"wrote counts of unplaced fragments with STR content to {args.output_prefix}-unplaced.txt"
 
 when isMainModule:
   when not defined(danger):

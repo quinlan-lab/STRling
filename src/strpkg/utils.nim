@@ -9,15 +9,29 @@ import algorithm
 {.push checks:off optimization:speed.}
 iterator slide_by*(s:string, k: int): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
-  var base: char
-  for i in countup(0, s.high - k + 1, k):
-    var f = s[i..<i+k].encode()
+  if k <= s.len:
+    var base: char
+    var f = s[0..<k].encode
     var kmin = f
+    # note that we are just rotating the kmer here, not adding new bases
     for j in 0..<k:
-      base = s[i + j]
-      f.forward_add(base, k)
-      kmin = min(kmin, f)
+        base = s[j]
+        f.forward_add(base, k)
+        kmin = min(f, kmin)
     yield kmin
+
+    # after the first k, then we can use the forward add of k bases
+    # to get to the next encode
+    for i in countup(k, s.high - k + 1, k):
+      for m in 0..<k:
+        f.forward_add(s[i + m], k)
+      kmin = f
+      # then rotate the kmer
+      for j in 0..<k:
+          base = s[i + j]
+          f.forward_add(base, k)
+          kmin = min(f, kmin)
+      yield kmin
 {.pop.}
 
 proc complement*(s:char): char {.inline.} =
@@ -55,7 +69,7 @@ proc min_rev_complement*(repeat: var array[6, char]) {.inline.} =
     s.add(c)
   s = s.reverse_complement
   let l = s.len
-  s.add(s)
+  s = s & s
   var mv = uint64(0) - 1'u64
   for m in s.slide_by(l):
     if m < mv:
@@ -215,25 +229,31 @@ proc reduce_repeat*(rep: var array[6, char]): int =
     rep[i] = '\0'
 
 # This is the bottleneck for run time at the moment
-proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options): array[6, char] =
+proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var int, opts:Options, debug:bool=false): array[6, char] =
   repeat_count = 0
   if read.count('N') > 20: return
   var s = newString(6)
 
   var best_score: int = -1
   for k in 2..6:
-    let count = read.count(k, counts[k])
+    var count = read.count(k, counts[k])
+    s = newString(k)
+    counts[k].argmax.decode(s)
     var score = count * k
+    if debug:
+      echo k, " ", score, " ", s, " actual count:", read.count(s), " est count:", count
     if score <= best_score:
       if count < (read.len.float * 0.12 / k.float).int:
         break
       continue
+    count = read.count(s)
+    score = count * k
+    if score < best_score: continue
+
     best_score = score
     if count > (read.len.float * opts.proportion_repeat / k.float).int:
       # now check the actual string because the kmer method can't track phase
-      s = newString(k)
-      counts[k].argmax.decode(s)
-      if read.count(s) > (read.len.float * opts.proportion_repeat / k.float).int:
+      if count >= (read.len.float * opts.proportion_repeat / k.float).int:
         copyMem(result.addr, s[0].addr, k)
         repeat_count = count
         if repeat_count > 0 and result[0] == '\0':
@@ -257,18 +277,30 @@ proc get_chrom*(tid:int, targets: seq[Target]): string =
     if t.tid == tid:
       return t.name
 
+proc `<`(a: array[6, char], b: array[6, char]): bool {.inline.} =
+  if a[0] != b[0]:
+    return a[0] < b[0]
+  if a[1] != b[1]:
+    return a[1] < b[1]
+  if a[2] != b[2]:
+    return a[2] < b[2]
+  if a[3] != b[3]:
+    return a[3] < b[3]
+  if a[4] != b[4]:
+    return a[4] < b[4]
+  return a[5] < b[5]
+
 proc canonical_repeat*(repeat: array[6, char]): array[6, char] =
-  var rev = repeat
-  rev.min_rev_complement
-  var first = @[repeat.tostring, rev.tostring].sorted[0]
-  for i in 0..len(first) - 1:
-    result[i] = first[i]
+  for i in 0..<6:
+    result[i] = repeat[i]
+  result.min_rev_complement
+  if result < repeat:
+    return
+  return repeat
 
 proc canonical_repeat*(repeat: string): string =
   var forward = ['\0', '\0', '\0', '\0', '\0', '\0']
-  for i in 0..len(repeat) - 1:
+  for i in 0..<len(repeat):
     forward[i] = repeat[i]
-  var rev = forward
-  rev.min_rev_complement
-  result = @[forward.tostring, rev.tostring].sorted[0]
+  result = forward.canonical_repeat.tostring
 

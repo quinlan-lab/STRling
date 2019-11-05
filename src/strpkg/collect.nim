@@ -21,13 +21,10 @@ type Support* = object
   SpanningReadCigarInsertionLen*: uint8
   SpanningReadCigarDeletionLen*: uint8
   repeat*: string
-  when defined(debug) or defined(qname):
-    qname: string
+  qname: string
 
 proc tostring*(s:Support, b:Bounds, chrom:string): string =
-  result = &"{chrom}\t{b.left}\t{b.right}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}"
-  when defined(debug) or defined(qname):
-    result &= "\t" & s.qname
+  result = &"{chrom}\t{b.left}\t{b.right}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}\t{s.qname}"
 
 proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, frag_sizes: array[4096, uint32]): bool =
   doAssert L.start <= R.start
@@ -39,8 +36,7 @@ proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, 
     support.SpanningFragmentLength = max(1'u32, L.isize.abs.uint32)
     support.SpanningFragmentPercentile = frag_sizes.percentile(support.SpanningFragmentLength.int)
     support.repeat = bounds.repeat
-    when defined(debug) or defined(qname):
-      support.qname = L.qname
+    support.qname = L.qname
     result = true
 
 proc find_read_position(A: Record, position:int): int =
@@ -94,8 +90,7 @@ proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
 
     # just do a count directly
     support.SpanningReadRepeatCount = A.count(bounds).uint8
-    when defined(debug) or defined(qname):
-      support.qname = A.qname
+    support.qname = A.qname
 
     for cig in A.cigar:
       if cig.op == Cigarop.insert:
