@@ -96,6 +96,7 @@ type Bounds* = object
   n_total*: uint16
   repeat*: string
   name*: string
+  force_report*: bool
 
 proc `==`(a,b: Bounds): bool =
   if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
@@ -121,6 +122,9 @@ proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
+  for x in result.repeat:
+    if x notin "ATCG":
+      quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
   doAssert(result.left <= result.right)
 
 # Parse an STR loci bed file

@@ -86,7 +86,7 @@ proc call_main*() =
     var t:tread
     fs.unpack(t)
     cache.cache.add(t)
-  stderr.write_line &"[strling] read {cache.cache.len} treads from bin file"
+  stderr.write_line &"[strling] read {cache.cache.len} STR reads from bin file"
 
   ### discovery
   var
@@ -139,6 +139,7 @@ proc call_main*() =
         b.name = locus.name
         b.left = locus.left
         b.right = locus.right
+        b.force_report = true
         # Remove locus from loci (therefore will use first matching bound and locus)
         loci.del(i)
         break
@@ -147,9 +148,10 @@ proc call_main*() =
       stderr.write_line "large bounds:" & $b & " skipping"
       continue
     # require left and right support
-    if b.n_left < min_clip: continue
-    if b.n_right < min_clip: continue
-    if (b.n_right + b.n_left) < min_clip_total: continue
+    if not b.force_report:
+      if b.n_left < min_clip: continue
+      if b.n_right < min_clip: continue
+      if (b.n_right + b.n_left) < min_clip_total: continue
 
     #[
     #debugging for reference size
@@ -187,12 +189,18 @@ proc call_main*() =
       stderr.write_line "large bounds:" & $locus & " skipping"
       continue
     var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
+    var empty_reads: seq[tread]
+    var gt = genotype(locus, empty_reads, spans, targets, float(median_depth))
+
+    var canon_repeat = locus.repeat.canonical_repeat
+    if not genotypes_by_repeat.hasKey(canon_repeat):
+      genotypes_by_repeat[canon_repeat] = @[]
+    genotypes_by_repeat[canon_repeat].add(gt)
+
     var estimate = spans.estimate_size(frag_dist)
     bounds_fh.write_line locus.tostring(targets) & "\t" & $median_depth
     for s in spans:
       span_fh.write_line s.tostring(locus, targets[locus.tid].name)
- 
-  ### end discovery
 
   # Loop through again and refine genotypes
   for repeat, genotypes in genotypes_by_repeat:
@@ -226,7 +234,5 @@ when isMainModule:
   when not defined(danger):
    stderr.write_line "warning !!! not compiled in fast mode. Compile with -d:danger to increase speed"
 
-  call_main()
-
-
   # Parse args/options
+  call_main()
