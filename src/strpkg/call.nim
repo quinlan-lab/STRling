@@ -25,7 +25,7 @@ proc call_main*() =
     option("-f", "--fasta", help="path to fasta file")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
-    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="1")
+    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
