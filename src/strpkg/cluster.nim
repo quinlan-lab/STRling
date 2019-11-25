@@ -10,10 +10,12 @@ import strutils
 import utils
 
 type Soft* {.size:1, pure.} = enum
-  left
-  right
-  both
+  left ## the left clipped portion of the read is repetitive
+  right ## the right clipped portion of the read is repetitive
+  both ## both sides of read are clipped and both are repetitive
   none
+  none_right ## looking at main part of read which is soft-clipped on the right
+  none_left ## looking at main part of read which is soft-clipped on the left
 
 # Data structure storing information about each read that looks like an STR
 type tread* = object

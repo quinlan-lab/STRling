@@ -88,6 +88,10 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
                  split: Soft.none,
                  mapping_quality: aln.mapping_quality,
                  qname: aln.qname)
+  if aln.cigar.len > 1 and aln.cigar[0].op == CigarOp.soft_clip:
+    result.split = Soft.none_left
+  if aln.cigar.len > 1 and aln.cigar[aln.cigar.len - 1].op == CigarOp.soft_clip:
+    result.split = Soft.none_right
 
 type Cache* = object
   tbl*: TableRef[string, tread]
@@ -138,7 +142,7 @@ proc should_reverse(f:Flag): bool {.inline.} =
   if f.reverse:
     result = not result
 
-proc adjust_by(A:var tread, B:tread, opts:Options): bool =
+proc adjust_by*(A:var tread, B:tread, opts:Options): bool =
   if A.repeat_count == 0'u8: return false
   # potentially adjust A position by B
 
@@ -156,11 +160,18 @@ proc adjust_by(A:var tread, B:tread, opts:Options): bool =
       #   =======>             <===========
       #   000000000000000000000000000000000 fragment length
       A.position = B.position - opts.median_fragment_length.uint32 + B.align_length + uint32(A.align_length.float / 2'f + 0.5)
+      # if B was soft-clipped on the left, we assume it was because of a
+      # repeat and we set the A position exact, rather than using fragment-length
+      if B.split == Soft.none_left:
+        A.position = B.position
+
     else:
       #   B                 A
       #   =======>             <===========
       #   000000000000000000000000000000000 fragment length
       A.position = B.position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
+      if B.split == Soft.none_right:
+        A.position = B.position
 
     A.tid = B.tid
     A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
