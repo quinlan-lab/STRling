@@ -1,4 +1,5 @@
 import ./strpkg/extract
+import ./strpkg/merge
 import ./strpkg/call
 import tables
 import os
@@ -12,6 +13,7 @@ proc main*() =
 
   var dispatcher = {
     "extract": pair(f:extract_main, description:"extract informative STR reads from a BAM/CRAM. This is a required first step."),
+    "merge": pair(f:merge_main, description:"merge putitive STR loci from multiple samples. Only required for joint calling."),
     "call": pair(f:call_main, description:"call STRs"),
     }.toOrderedTable
   var args = commandLineParams()
