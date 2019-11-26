@@ -113,8 +113,8 @@ suite "cluster suite":
 
     var cl = Cluster(reads:reads)
     var b = cl.bounds
-    check b.left == 2
-    check b.right == 3
+    check b.left == 3
+    check b.right == 4
 
 # This test is failing. Need to think about how to fix
 #  test "test bounds: no left soft-clipped reads so use median":

@@ -15,6 +15,5 @@ suite "extract suite":
 
     var opts = Options(proportion_repeat: 0.4, min_mapq: 20)
 
-
-    check A.adjust_by(B, opts)
-    check A.position == B.position
+    check A.adjust_by(B, opts, B.position)
+    check A.position == B.position + B.align_length

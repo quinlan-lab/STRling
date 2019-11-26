@@ -88,9 +88,10 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
                  split: Soft.none,
                  mapping_quality: aln.mapping_quality,
                  qname: aln.qname)
-  if aln.cigar.len > 1 and aln.cigar[0].op == CigarOp.soft_clip:
+  let L = aln.cigar.len
+  if L > 1 and aln.cigar[0].op == CigarOp.soft_clip and aln.cigar[0].len > 16:
     result.split = Soft.none_left
-  if aln.cigar.len > 1 and aln.cigar[aln.cigar.len - 1].op == CigarOp.soft_clip:
+  if L > 1 and aln.cigar[L - 1].op == CigarOp.soft_clip and aln.cigar[L - 1].len > 16:
     result.split = Soft.none_right
 
 type Cache* = object
@@ -142,7 +143,7 @@ proc should_reverse(f:Flag): bool {.inline.} =
   if f.reverse:
     result = not result
 
-proc adjust_by*(A:var tread, B:tread, opts:Options): bool =
+proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
   if A.repeat_count == 0'u8: return false
   # potentially adjust A position by B
 
@@ -159,20 +160,22 @@ proc adjust_by*(A:var tread, B:tread, opts:Options): bool =
       #   A                  B
       #   =======>             <===========
       #   000000000000000000000000000000000 fragment length
-      A.position = B.position - opts.median_fragment_length.uint32 + B.align_length + uint32(A.align_length.float / 2'f + 0.5)
+      A.position = B_position - opts.median_fragment_length.uint32 + B.align_length + uint32(A.align_length.float / 2'f + 0.5)
       # if B was soft-clipped on the left, we assume it was because of a
       # repeat and we set the A position exact, rather than using fragment-length
       if B.split == Soft.none_left:
-        A.position = B.position
+        A.position = B_position
 
     else:
       #   B                 A
       #   =======>             <===========
       #   000000000000000000000000000000000 fragment length
-      A.position = B.position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
+      A.position = B_position + opts.median_fragment_length.uint32 - uint32(A.align_length.float / 2'f + 0.5)
       if B.split == Soft.none_right:
-        A.position = B.position
+        A.position = B_position + B.align_length.uint32
 
+    # if we have adjusted A based on B, then any split is not informative.
+    A.split = Soft.none
     A.tid = B.tid
     A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
     if A.flag.should_reverse:
@@ -235,9 +238,10 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
       cache.cache.add(mate)
       return
 
-    if mate.adjust_by(self, opts):
+    var mp = mate.position # calculations are based on uncorrected pos
+    if mate.adjust_by(self, opts, self.position):
       cache.cache.add(mate)
-    if self.adjust_by(mate, opts):
+    if self.adjust_by(mate, opts, mp):
       cache.cache.add(self)
 
   else:
