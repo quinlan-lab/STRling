@@ -150,8 +150,7 @@ proc bounds*(cl:Cluster): Bounds =
     elif r.split == Soft.left:
       lefts.inc(r.position)
       result.n_left.inc
-    else:
-      posns.add(r.position)
+    posns.add(r.position)
 
   if lefts.len > 0:
     var ll = lefts.largest
