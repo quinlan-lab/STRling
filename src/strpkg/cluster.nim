@@ -194,7 +194,7 @@ proc trim(cl:var Cluster, max_dist:uint32) =
     cl.reads = cl.reads[1..cl.reads.high]
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
-  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}\t{b.name}"
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string

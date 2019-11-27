@@ -86,6 +86,9 @@ proc merge_main*() =
     # Parse bed file of regions and report spanning reads
     loci = parse_loci(args.loci, targets)
 
+  # Write header
+  bounds_fh.write_line "#chrom\tleft\tright\trepeat\tname\tcenter_mass\tn_left\tn_right\tn_total"
+
   var ci = 0
   for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
     if c.reads[0].tid == -1:
