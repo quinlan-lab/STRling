@@ -13,6 +13,7 @@ export Soft
 proc merge_main*() =
   var p = newParser("strling merge"):
     option("-f", "--fasta", help="path to fasta file (required if using CRAM input)")
+    option("-w", "--window", help="Number of bp within which to search for reads supporting the other side of a bound. Estimated from the insert size distribution by default.", default = "-1")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
@@ -35,6 +36,7 @@ proc merge_main*() =
     quit 0
 
   var ibam_dist:Bam
+  var window = parseInt(args.window)
   var min_support = parseInt(args.min_support)
   var min_clip = uint16(parseInt(args.min_clip))
   var min_clip_total = uint16(parseInt(args.min_clip_total))
@@ -79,7 +81,8 @@ proc merge_main*() =
     quit "couldn't open output file"
 
   #XXX this should already have been estimated for all samples? Record in bin and take average?
-  var window = frag_dist.median(0.98)
+  if window < 0:
+    window = frag_dist.median(0.98)
 
   var loci: seq[Bounds]
   if args.loci != "":
