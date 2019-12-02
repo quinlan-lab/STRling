@@ -111,16 +111,16 @@ proc call_main*() =
   # Write headers
   bounds_fh.write_line "#chrom\tleft\tright\trepeat\tname\tcenter_mass\tn_left\tn_right\tn_total"
   reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
-  gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\ttotal_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
-
+  gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
 
 
   var targets = ibam.hdr.targets
 
   var loci: seq[Bounds]
   if args.loci != "":
-    # Parse bed file of regions and report spanning reads
+    # Parse bed file of regions. These will also be genotyped
     loci = parse_loci(args.loci, targets)
+    stderr.write_line &"Read {len(loci)} loci from {args.loci}"
 
   var unplaced_counts = initCountTable[string]()
   var genotypes_by_repeat = initTable[string, seq[Call]]()
@@ -170,6 +170,11 @@ proc call_main*() =
     ]#
 
     var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+    if spans.len > 5_000:
+      when defined(debug):
+        stderr.write_line &"High depth for bound {targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
+      continue
+
     var gt = genotype(b, c.reads, spans, targets, float(median_depth))
 
     var canon_repeat = b.repeat.canonical_repeat
@@ -185,12 +190,18 @@ proc call_main*() =
       reads_fh.write_line s.tostring(targets) & "\t" & $ci
     ci += 1
 
+  stderr.write_line &"Genotyping the {len(loci)} loci that did not overlap a bound in this sample"
   # Report spanning reads/pairs for any remaining loci that were not matched with a bound
   for locus in loci:
     if locus.right - locus.left > 1000'u32:
       stderr.write_line "large bounds:" & $locus & " skipping"
       continue
     var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
+    if spans.len > 5_000:
+      when defined(debug):
+        stderr.write_line &"High depth for bound {targets[locus.tid].name}:{locus.left}-{locus.right} got {spans.len} pairs. Skipping."
+      continue 
+
     var empty_reads: seq[tread]
     var gt = genotype(locus, empty_reads, spans, targets, float(median_depth))
 

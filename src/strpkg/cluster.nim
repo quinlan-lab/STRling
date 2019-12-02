@@ -109,6 +109,14 @@ proc overlaps*(a,b: Bounds): bool =
     var iright = min(a.right, b.right) #upper bound of intersection interval
     return ileft <= iright #interval non-empty?
 
+# Check if a read (Record) overlaps with a Bounds overlap.
+# Same logic/assumptions as overlaps for Bounds above
+proc overlaps*(a: Record, b: Bounds): bool =
+  if a.tid == b.tid:
+    var ileft = max(a.start, int(b.left))
+    var iright = min(a.stop, int(b.right))
+    return ileft <= iright
+
 # Parse single line of a an STR loci file
 proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.splitWhitespace()

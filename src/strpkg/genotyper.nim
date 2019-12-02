@@ -37,7 +37,7 @@ type Call* = object
   # and confidence intervals around the allele size esimates
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
-  anchored_reads: uint
+  overlapping_reads: uint
   spanning_reads: uint
   spanning_pairs: uint
   left_clips: uint
@@ -48,7 +48,7 @@ type Call* = object
   # ...
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -64,7 +64,7 @@ proc spanning_read_est(reads: seq[Support]): Evidence =
     Indels: CountTable[int8]
 
   for read in reads:
-    if read.SpanningFragmentLength == 0:
+    if read.Type == SupportType.SpanningRead:
       RepeatCounts.inc(read.SpanningReadRepeatCount)
       Indels.inc(int8(read.SpanningReadCigarInsertionLen) - int8(read.SpanningReadCigarDeletionLen))
       result.supporting_reads += 1
@@ -100,7 +100,7 @@ proc spanning_pairs_est(reads: seq[Support]): Evidence =
     FragmentSizes: CountTable[uint32]
 
   for read in reads:
-    if read.SpanningFragmentLength > 0'u32:
+    if read.Type == SupportType.SpanningFragment:
       FragmentSizes.inc(read.SpanningFragmentLength)
       result.supporting_reads += 1
 
@@ -114,8 +114,8 @@ proc anchored_lm(sum_str_counts: uint, depth: float): float =
   var y = log2(float(sum_str_counts)/(depth + 1) + 1) * cofficient + intercept
   return pow(2,y)
 
-proc anchored_est(reads: seq[tread], depth: float): Evidence =
-  # Estimate size in bp using repeat content of anchored reads
+proc sum_str_est(reads: seq[tread], depth: float): Evidence =
+  # Estimate size in bp using repeat content of anchored and overlapping reads
   result.supporting_reads = uint(len(reads))
   for tread in reads:
     result.sum_str_counts += tread.repeat_count
@@ -152,10 +152,10 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
     result.spanning_pairs = spanning_pairs_est.supporting_reads
 
   # Use anchored reads to estimate long allele
-  var anchored_est = anchored_est(tandems, depth)
-  result.anchored_reads = anchored_est.supporting_reads
-  result.sum_str_counts = anchored_est.sum_str_counts
-  var large_allele_bp = anchored_est.allele2_bp
+  var sum_str_est = sum_str_est(tandems, depth)
+  result.overlapping_reads = sum_str_est.supporting_reads
+  result.sum_str_counts = sum_str_est.sum_str_counts
+  var large_allele_bp = sum_str_est.allele2_bp
   result.allele2 = large_allele_bp/float(max(1, RUlen))
 
   # Revise allele esimates using spanning pairs
