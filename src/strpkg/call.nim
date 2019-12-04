@@ -174,6 +174,8 @@ proc call_main*() =
       when defined(debug):
         stderr.write_line &"High depth for bound {targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
       continue
+    if median_depth == -1:
+      continue
 
     var gt = genotype(b, c.reads, spans, targets, float(median_depth))
 
@@ -201,6 +203,8 @@ proc call_main*() =
       when defined(debug):
         stderr.write_line &"High depth for bound {targets[locus.tid].name}:{locus.left}-{locus.right} got {spans.len} pairs. Skipping."
       continue 
+    if median_depth == -1:
+      continue
 
     var empty_reads: seq[tread]
     var gt = genotype(locus, empty_reads, spans, targets, float(median_depth))
