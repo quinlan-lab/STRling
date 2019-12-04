@@ -55,7 +55,7 @@ proc call_main*() =
     if not fileExists(args.loci):
       quit "couldn't open loci file"
 
-  if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
+  if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
