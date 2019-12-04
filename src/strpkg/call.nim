@@ -140,23 +140,24 @@ proc call_main*() =
   var unplaced_counts = initCountTable[string]()
   var genotypes_by_repeat = initTable[string, seq[Call]]()
 
+  stderr.write_line &"Genotyping the {len(loci)} loci that did not overlap a bound in this sample"
   for locus in loci:
     var key: tid_rep = (locus.tid, locus.repeat.as_array)
     var trs = treads_by_tid_rep.getOrDefault(key, @[])
 
-    # TODO: add left-most and right-most
     var li = lowerBound(trs, tread(position: locus.left_most - 1), proc(a, b:tread):int =
       return cmp(a.position, b.position)
     )
     var ri = upperBound(trs, tread(position: locus.right_most), proc(a, b:tread):int =
       return cmp(a.position, b.position)
     )
+    stderr.write_line "[strling] got {ri - li} treads for locus: {locus} with indexes {li}..{ri}"
 
-    # now we have a the subset of treads that support the given locus
-    var str_reads = trs[li..ri]
-    # TODO: do something with these.
+    var str_reads: seq[tread]
+    if trs.len > 0:
+      # now we have a the subset of treads that support the given locus
+      str_reads = trs[li..ri]
 
-    stderr.write_line &"Genotyping the {len(loci)} loci that did not overlap a bound in this sample"
     # Report spanning reads/pairs for any remaining loci that were not matched with a bound
     if locus.right - locus.left > 1000'u32:
       stderr.write_line "large bounds:" & $locus & " skipping"
