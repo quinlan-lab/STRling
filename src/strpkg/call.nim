@@ -77,7 +77,7 @@ proc call_main*() =
   ibam_dist.close()
   ibam_dist = nil
   var ibam:Bam
-  if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
