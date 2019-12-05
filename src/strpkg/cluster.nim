@@ -67,6 +67,8 @@ proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
 
 type Cluster* = object
   reads*: seq[tread]
+  left_most*: uint32
+  right_most*: uint32
 
 const mediani = 9
 
@@ -89,7 +91,9 @@ proc tread_cmp(a: tread, b:tread): int =
 type Bounds* = object
   tid*: int32
   left*: uint32
+  left_most*:uint32
   right*: uint32
+  right_most*: uint32
   center_mass*: uint32
   n_left*: uint16
   n_right*: uint16
@@ -151,6 +155,8 @@ proc bounds*(cl:Cluster): Bounds =
     if c == 0.char: break
     result.repeat.add(c)
   result.tid = cl.reads[0].tid
+  result.left_most = cl.left_most
+  result.right_most = cl.right_most
   doAssert cl.reads.len <= uint16.high.int, ("got too many reads for cluster with first read:" & $cl.reads[0])
 
   for r in cl.reads:
@@ -249,6 +255,8 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
         else:
           c2.reads.add(r)
 
+      c1.right_most = mid - 1
+      c2.left_most = mid
       yield c1
       yield c2
 
@@ -259,6 +267,7 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
 iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int): Cluster =
   var i = 0
   var c:Cluster
+  var last_right = 0'u32
   while i < reps.len:
     # start a new cluster
     var it = reps[i]
@@ -275,29 +284,33 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
 
       # remove stuff (at start of cluster) that's now too far away.
       c.trim(max_dist + 100)
+      c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
+      c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
+
       if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-        for sc in c.split_cluster(min_supporting_reads): yield sc
+        for sc in c.split_cluster(min_supporting_reads):
+          yield sc
+          last_right = sc.right_most
         c = Cluster()
       # increment i to past last j and break out of this cluster
       break
 
   c.trim(max_dist + 100)
+  c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
+  c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
   if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-    for sc in c.split_cluster(min_supporting_reads): yield sc
+    for sc in c.split_cluster(min_supporting_reads):
+      yield sc
 
+iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
+  # reps passed here are guaranteed to be split by tid and repeat unit.
+  if reps.len > 0:
+    doAssert reps[0].tid == reps[reps.high].tid and reps[0].repeat == reps[reps.high].repeat
 
-iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
-  tandems.sort(tread_cmp)
-
-  for group in groupby(tandems, bytidrep):
-    # reps are on same chromosome and have same repeat unit
-    var reps: seq[tread] = group.v
-
-    if reps[0].tid < 0:
-      #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
-      yield Cluster(reads: reps)
-      continue
-
+  if reps[0].tid < 0:
+    #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
+    yield Cluster(reads: reps)
+  else:
     for c in trcluster(reps, max_dist, min_supporting_reads):
       yield c
 

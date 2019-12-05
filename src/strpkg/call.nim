@@ -20,6 +20,12 @@ import math
 import argparse
 import ./extract
 
+type tid_rep = tuple[tid:int32, repeat: array[6, char]]
+
+proc as_array(s:string): array[6, char] =
+  for i, c in s:
+    result[i] = c
+
 proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
@@ -55,7 +61,7 @@ proc call_main*() =
     if not fileExists(args.loci):
       quit "couldn't open loci file"
 
-  if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
+  if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -76,7 +82,11 @@ proc call_main*() =
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
-  var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
+  #var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
+
+  var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
+
+
   var opts = Options(median_fragment_length: frag_median,
                       min_support: min_support, min_mapq: min_mapq)
   var nreads = 0
@@ -85,8 +95,13 @@ proc call_main*() =
   while not fs.atEnd:
     var t:tread
     fs.unpack(t)
-    cache.cache.add(t)
-  stderr.write_line &"[strling] read {cache.cache.len} STR reads from bin file"
+    treads_by_tid_rep.mgetOrPut((t.tid, t.repeat), newSeq[tread]()).add(t)
+  for k, trs in treads_by_tid_rep.mpairs:
+    trs.sort(proc(a, b:tread): int =
+      cmp(a.position, b.position)
+    )
+
+  #stderr.write_line &"[strling] read {cache.cache.len} STR reads from bin file"
 
   ### discovery
   var
@@ -125,35 +140,76 @@ proc call_main*() =
   var unplaced_counts = initCountTable[string]()
   var genotypes_by_repeat = initTable[string, seq[Call]]()
 
+  stderr.write_line &"Genotyping the {len(loci)} loci that did not overlap a bound in this sample"
+  for locus in loci:
+    var key: tid_rep = (locus.tid, locus.repeat.as_array)
+    var trs = treads_by_tid_rep.getOrDefault(key, @[])
+
+    var li = lowerBound(trs, tread(position: locus.left_most - 1), proc(a, b:tread):int =
+      return cmp(a.position, b.position)
+    )
+    var ri = upperBound(trs, tread(position: locus.right_most), proc(a, b:tread):int =
+      return cmp(a.position, b.position)
+    )
+    stderr.write_line "[strling] got {ri - li} treads for locus: {locus} with indexes {li}..{ri}"
+
+    var str_reads: seq[tread]
+    if trs.len > 0:
+      # now we have a the subset of treads that support the given locus
+      str_reads = trs[li..ri]
+
+    # Report spanning reads/pairs for any remaining loci that were not matched with a bound
+    if locus.right - locus.left > 1000'u32:
+      stderr.write_line "large bounds:" & $locus & " skipping"
+      continue
+    var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
+    if spans.len > 5_000:
+      when defined(debug):
+        stderr.write_line &"High depth for bound {targets[locus.tid].name}:{locus.left}-{locus.right} got {spans.len} pairs. Skipping."
+      continue 
+    if median_depth == -1:
+      continue
+
+    var gt = genotype(locus, str_reads, spans, targets, float(median_depth))
+
+    var canon_repeat = locus.repeat.canonical_repeat
+    if not genotypes_by_repeat.hasKey(canon_repeat):
+      genotypes_by_repeat[canon_repeat] = @[]
+    genotypes_by_repeat[canon_repeat].add(gt)
+
+    var estimate = spans.estimate_size(frag_dist)
+    bounds_fh.write_line locus.tostring(targets) & "\t" & $median_depth
+    for s in spans:
+      span_fh.write_line s.tostring(locus, targets[locus.tid].name)
+
+    # remove these from the table
+    if trs.len > 0:
+      treads_by_tid_rep[key] = trs[0..<li]
+      if ri < trs.high:
+        treads_by_tid_rep[key].add(trs[ri + 1..trs.high])
+
   var ci = 0
-  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
-    if c.reads[0].tid == -1:
-      unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
-      continue
-    if c.reads.len >= uint16.high.int:
-      stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
-      continue
-    var b = c.bounds
 
-    # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
-    for i, locus in loci:
-      if b.overlaps(locus):
-        b.name = locus.name
-        b.left = locus.left
-        b.right = locus.right
-        b.force_report = true
-        # Remove locus from loci (therefore will use first matching bound and locus)
-        loci.del(i)
-        break
+  for key, treads in treads_by_tid_rep.mpairs:
+    ## treads are for the single tid, repeat unit defined by key
+    for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
+      if c.reads[0].tid == -1:
+        unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
+        continue
+      if c.reads.len >= uint16.high.int:
+        stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
+        continue
+      var b = c.bounds
 
-    if b.right - b.left > 1000'u32:
-      stderr.write_line "large bounds:" & $b & " skipping"
-      continue
-    # require left and right support
-    if not b.force_report:
-      if b.n_left < min_clip: continue
-      if b.n_right < min_clip: continue
-      if (b.n_right + b.n_left) < min_clip_total: continue
+      if b.right - b.left > 1000'u32:
+        stderr.write_line "large bounds:" & $b & " skipping"
+        continue
+
+      # require left and right support
+      if not b.force_report:
+        if b.n_left < min_clip: continue
+        if b.n_right < min_clip: continue
+        if (b.n_right + b.n_left) < min_clip_total: continue
 
     #[
     #debugging for reference size
@@ -169,51 +225,28 @@ proc call_main*() =
       discard
     ]#
 
-    var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
-    if spans.len > 5_000:
-      when defined(debug):
-        stderr.write_line &"High depth for bound {targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
-      continue
+      var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
+      if spans.len > 5_000:
+        when defined(debug):
+          stderr.write_line &"High depth for bound {targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
+        continue
+      if median_depth == -1:
+        continue
 
-    var gt = genotype(b, c.reads, spans, targets, float(median_depth))
+      var gt = genotype(b, c.reads, spans, targets, float(median_depth))
 
-    var canon_repeat = b.repeat.canonical_repeat
-    if not genotypes_by_repeat.hasKey(canon_repeat):
-      genotypes_by_repeat[canon_repeat] = @[]
-    genotypes_by_repeat[canon_repeat].add(gt)
+      var canon_repeat = b.repeat.canonical_repeat
+      if not genotypes_by_repeat.hasKey(canon_repeat):
+        genotypes_by_repeat[canon_repeat] = @[]
+      genotypes_by_repeat[canon_repeat].add(gt)
 
-    var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
-    for s in spans:
-      span_fh.write_line s.tostring(b, targets[b.tid].name)
-    for s in c.reads:
-      reads_fh.write_line s.tostring(targets) & "\t" & $ci
-    ci += 1
-
-  stderr.write_line &"Genotyping the {len(loci)} loci that did not overlap a bound in this sample"
-  # Report spanning reads/pairs for any remaining loci that were not matched with a bound
-  for locus in loci:
-    if locus.right - locus.left > 1000'u32:
-      stderr.write_line "large bounds:" & $locus & " skipping"
-      continue
-    var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
-    if spans.len > 5_000:
-      when defined(debug):
-        stderr.write_line &"High depth for bound {targets[locus.tid].name}:{locus.left}-{locus.right} got {spans.len} pairs. Skipping."
-      continue 
-
-    var empty_reads: seq[tread]
-    var gt = genotype(locus, empty_reads, spans, targets, float(median_depth))
-
-    var canon_repeat = locus.repeat.canonical_repeat
-    if not genotypes_by_repeat.hasKey(canon_repeat):
-      genotypes_by_repeat[canon_repeat] = @[]
-    genotypes_by_repeat[canon_repeat].add(gt)
-
-    var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line locus.tostring(targets) & "\t" & $median_depth
-    for s in spans:
-      span_fh.write_line s.tostring(locus, targets[locus.tid].name)
+      var estimate = spans.estimate_size(frag_dist)
+      bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
+      for s in spans:
+        span_fh.write_line s.tostring(b, targets[b.tid].name)
+      for s in c.reads:
+        reads_fh.write_line s.tostring(targets) & "\t" & $ci
+      ci += 1
 
   # Loop through again and refine genotypes
   for repeat, genotypes in genotypes_by_repeat:
@@ -234,7 +267,6 @@ proc call_main*() =
   span_fh.close
   unplaced_fh.close
   if args.verbose:
-    stderr.write_line cache.tbl.len, " left in table"
     stderr.write_line &"Supporting evidence used to make the genotype calls:"
     stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
     stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"

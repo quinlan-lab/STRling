@@ -146,6 +146,11 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      # but deleting from a table is not cheap so current trade-off memory for speed.
      # should instead add a reduced object with chrom, sequence, cigar
      pairs.mgetOrPut(aln.qname, @[]).add(aln.copy())
+     if pairs.len mod 5000 == 0:
+       stderr.write_line "memory usage. number of pairs:", pairs.len, " bounds:", bounds
+     if pairs.len > 20_000:
+       stderr.write_line "high-depth for bounds:", bounds, " skipping"
+       return (@[], -1)
 
   for qname, pair in pairs:
     if len(pair) != 2: continue
