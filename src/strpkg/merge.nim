@@ -1,12 +1,16 @@
 import msgpack4nim
 import hts/bam
 import hts/fai
+import strformat
+import argparse
+import algorithm
+
 import ./cluster
 import ./utils
 import ./genome_strs
-import strformat
-import argparse
 import ./extract
+import ./callclusters
+
 export tread
 export Soft
 
@@ -18,7 +22,7 @@ proc merge_main*() =
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
-    option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
+    option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
     flag("-v", "--verbose")
     arg("bam", help="path to a single representitive bam or cram file (for extracting fragment size dist)")
@@ -43,9 +47,9 @@ proc merge_main*() =
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
 
-  if args.loci != "":
-    if not fileExists(args.loci):
-      quit "couldn't open loci file"
+  if args.bed != "":
+    if not fileExists(args.bed):
+      quit "couldn't open bed file"
 
   if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
@@ -62,9 +66,11 @@ proc merge_main*() =
   ibam_dist.close()
   ibam_dist = nil
 
-  var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median,
                       min_support: min_support, min_mapq: min_mapq)
+
+  # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
+  var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
 
   for binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
@@ -72,61 +78,56 @@ proc merge_main*() =
     while not fs.atEnd:
       var t:tread
       fs.unpack(t)
-      cache.cache.add(t)
+      treads_by_tid_rep.mgetOrPut((t.tid, t.repeat), newSeq[tread]()).add(t)
       nreads += 1
     stderr.write_line &"[strling] read {nreads} STR reads from file: {binfile}"
+  for k, trs in treads_by_tid_rep.mpairs:
+    trs.sort(proc(a, b:tread): int =
+      cmp(a.position, b.position)
+    )
+
+  #XXX check all bin files are from the same reference genome
 
   var bounds_fh:File
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
     quit "couldn't open output file"
+
+  # Write header
+  bounds_fh.write_line(bounds_header)
 
   #XXX this should already have been estimated for all samples? Record in bin and take average?
   if window < 0:
     window = frag_dist.median(0.98)
 
   var loci: seq[Bounds]
-  if args.loci != "":
+  if args.bed != "":
     # Parse bed file of regions and report spanning reads
-    loci = parse_loci(args.loci, targets)
+    loci = parse_bed(args.bed, targets, window.uint32)
 
-  # Write header
-  bounds_fh.write_line "#chrom\tleft\tright\trepeat\tname\tcenter_mass\tn_left\tn_right\tn_total"
+  # Assign STR reads to provided loci
+  for locus in loci:
+    var str_reads = assign_reads_locus(locus, treads_by_tid_rep)
+    bounds_fh.write_line locus.tostring(opts.targets)
 
+  # Cluster remaining reads
   var ci = 0
-  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
-    if c.reads[0].tid == -1:
-      continue
-    if c.reads.len >= uint16.high.int:
-      stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
-      continue
-    var b = c.bounds
+  for key, treads in treads_by_tid_rep.mpairs:
+    ## treads are for the single tid, repeat unit defined by key
+    for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
+      if c.reads[0].tid == -1:
+        continue
 
-    # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
-    for i, locus in loci:
-      if b.overlaps(locus):
-        b.name = locus.name
-        b.left = locus.left
-        b.right = locus.right
-        b.force_report = true
-        # Remove locus from loci (therefore will use first matching bound and locus)
-        loci.del(i)
-        break
+      var b: Bounds
+      var good_cluster: bool
+      (b, good_cluster) = check_cluster(c, min_clip, min_clip_total)
+      if good_cluster == false:
+        continue
 
-    if b.right - b.left > 1000'u32:
-      stderr.write_line "large bounds:" & $b & " skipping"
-      continue
-    # require left and right support
-    if not b.force_report:
-      if b.n_left < min_clip: continue
-      if b.n_right < min_clip: continue
-      if (b.n_right + b.n_left) < min_clip_total: continue
-
-    bounds_fh.write_line b.tostring(targets)
-    ci += 1
+      bounds_fh.write_line b.tostring(targets)
+      ci += 1
 
   bounds_fh.close
   if args.verbose:
-    stderr.write_line cache.tbl.len, " left in table"
     stderr.write_line &"Wrote merged str bounds to {args.output_prefix}-bounds.txt"
 
 when isMainModule:

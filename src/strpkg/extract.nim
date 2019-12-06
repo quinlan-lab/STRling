@@ -342,6 +342,7 @@ proc extract_main*() =
   if fs == nil:
     quit "[strling] couldnt open binary output file"
   # TODO: write min_mapq, proportion repeat to start of bin file
+  # TODO: write bam header and window = frag_dist.median(0.98)
   for c in cache.cache:
     fs.pack(c)
   stderr.write_line "[strling] finished extraction"

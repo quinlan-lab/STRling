@@ -9,6 +9,14 @@ import hts/bam
 import strutils
 import utils
 
+#import ./collect
+#import ./utils
+#import ./genotyper
+#import ./genome_strs
+#import ./extract
+
+type tid_rep* = tuple[tid:int32, repeat: array[6, char]]
+
 type Soft* {.size:1, pure.} = enum
   left ## the left clipped portion of the read is repetitive
   right ## the right clipped portion of the read is repetitive
@@ -102,6 +110,8 @@ type Bounds* = object
   name*: string
   force_report*: bool
 
+const bounds_header* = "#chrom\tleft\tright\trepeat\tname\tleft_most\tright_most\tcenter_mass\tn_left\tn_right\tn_total"
+
 proc `==`(a,b: Bounds): bool =
   if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
     return true
@@ -121,8 +131,8 @@ proc overlaps*(a: Record, b: Bounds): bool =
     var iright = min(a.stop, int(b.right))
     return ileft <= iright
 
-# Parse single line of a an STR loci file
-proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
+# Parse single line of an STR loci bed file
+proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   var l_split = l.splitWhitespace()
   if len(l_split) == 4:
     discard
@@ -134,15 +144,45 @@ proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
+  result.left_most = result.left - window
+  result.right_most = result.right + window
+  
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
   doAssert(result.left <= result.right)
 
 # Parse an STR loci bed file
-proc parse_loci*(f:string, targets: seq[Target]): seq[Bounds] =
+proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
   for line in lines f:
-    result.add(parse_bounds(string(line), targets))
+    result.add(parse_bedline(string(line), targets, window))
+
+# Parse single line of a STRling bounds file
+proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
+  var l_split = l.split("\t")
+  if len(l_split) != 11:
+    quit fmt"Error reading loci bed file. Expected 11 fields and got {len(l_split)} on line: {l}"
+  result.tid = int32(get_tid(l_split[0], targets))
+  result.left = uint32(parseInt(l_split[1]))
+  result.right = uint32(parseInt(l_split[2]))
+  result.repeat = l_split[3]
+  result.name = l_split[4]
+  result.left_most = uint32(parseInt(l_split[5]))
+  result.right_most = uint32(parseInt(l_split[6]))
+  result.center_mass = uint32(parseInt(l_split[7]))
+  result.n_left = uint16(parseInt(l_split[8]))
+  result.n_right = uint16(parseInt(l_split[9]))
+  result.n_total = uint16(parseInt(l_split[10]))
+  for x in result.repeat:
+    if x notin "ATCG":
+      quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
+  doAssert(result.left <= result.right)
+
+# Parse an STRling bounds file
+proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
+  for line in lines f:
+    result.add(parse_boundsline(string(line), targets))
+
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
@@ -208,7 +248,7 @@ proc trim(cl:var Cluster, max_dist:uint32) =
     cl.reads = cl.reads[1..cl.reads.high]
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
-  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.left_most}\t{b.right_most}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string

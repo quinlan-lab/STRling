@@ -126,21 +126,41 @@ suite "cluster suite":
 #    check b.left == 3
 #    check b.right == 3
 
-  test "test parse STR region":
-    var l = "chr1 1 100 CAG"
+  test "test parse line from STR bed file":
+    var l = "chr1 100 200 CAG"
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
-    var b = parse_bounds(l, targets)
+    var window = 50
+    var b = parse_bedline(l, targets, window.uint32)
     check b.tid == 0
-    check b.left == 1
-    check b.right == 100
+    check b.left == 100
+    check b.left_most == 50
+    check b.right == 200
+    check b.right_most == 250
     check b.repeat == "CAG"
 
   test "test parse STR bed file":
     var f = "test_str_parse.bed"
     var text = "chr1 1 100 CAG\nchr1 1 100 CAG"
+    var window = 100
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
     writeFile(f, text)
-    check parse_loci(f, targets)[1].tid == 0
+    check parse_bed(f, targets, window.uint32)[1].tid == 0
+
+  test "test parse line from STRling -bounds.txt":
+    var l = "chr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    var b = parse_boundsline(l, targets)
+    check b.tid == 0
+    check b.left == 990
+    check b.right == 1010
+    check b.repeat == "CAG"
+
+  test "test parse STRling -bounds.txt file":
+    var f = "test_str_parse-bounds.txt"
+    var text = "chr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50\nchr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    writeFile(f, text)
+    check parse_bounds(f, targets)[1].tid == 0
 
 
   test "inverted bounds":

@@ -121,6 +121,8 @@ type Options* = object
   proportion_repeat*: float
   min_mapq*: uint8
   min_support*: int
+  window*: int
+  targets*: seq[Target]
 
 proc percentile*(fragment_sizes: array[4096, uint32], fragment_length:int): float =
   var total = sum(fragment_sizes)
@@ -270,6 +272,15 @@ proc tostring*(a:array[6, char]): string =
   for c in a:
     if c == 0.char: return
     result.add(c)
+
+# Represent an STR repeat unit as an array
+proc as_array*(s:string): array[6, char] =
+  when defined(debug):
+    doAssert s.len <= 6
+    for x in s:
+      doAssert x in "ATCG"
+  for i, c in s:
+    result[i] = c
 
 # Get a chromosome name for a given tid
 proc get_chrom*(tid:int, targets: seq[Target]): string =
