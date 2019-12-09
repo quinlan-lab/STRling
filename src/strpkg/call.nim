@@ -19,9 +19,21 @@ import ./genotyper
 import ./genome_strs
 import ./extract
 import ./callclusters
+import ./unpack
 
 export tread
 export Soft
+
+proc `==`(a, b:Target): bool =
+  return a.tid == b.tid and a.length == b.length and a.name == b.name
+
+proc same(a:seq[Target], b:seq[Target]): bool =
+  if a.len != b.len:
+    return false
+  for i, aa in a:
+    if aa != b[i]:
+      return false
+  return true
 
 proc call_main*() =
   var p = newParser("strling call"):
@@ -88,10 +100,12 @@ proc call_main*() =
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
 
   var fs = newFileStream(args.bin, fmRead)
-  while not fs.atEnd:
-    var t:tread
-    fs.unpack(t)
-    treads_by_tid_rep.mgetOrPut((t.tid, t.repeat), newSeq[tread]()).add(t)
+  var extracted = fs.unpack_file()
+  doAssert extracted.targets.same(ibam.hdr.targets)
+  fs.close()
+  for r in extracted.reads:
+    treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
+  # TODO: use other extracted stuffs here.
   for k, trs in treads_by_tid_rep.mpairs:
     trs.sort(proc(a, b:tread): int =
       cmp(a.position, b.position)

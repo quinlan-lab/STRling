@@ -1,5 +1,6 @@
 import kmer
 import algorithm
+import ./version
 import ./genome_strs
 import msgpack4nim
 import strutils
@@ -343,6 +344,16 @@ proc extract_main*() =
     quit "[strling] couldnt open binary output file"
   # TODO: write min_mapq, proportion repeat to start of bin file
   # TODO: write bam header and window = frag_dist.median(0.98)
+
+  fs.write("STR")
+  fs.write(0'i16)
+  fs.write(strlingVersion.asArray9)
+  fs.write(proportion_repeat.float32)
+  fs.write(min_mapq.uint8)
+  fs.write(frag_dist)
+  fs.write(($ibam.hdr).len.int32)
+  fs.write($ibam.hdr)
+  fs.write(cache.cache.len.int32)
   for c in cache.cache:
     fs.pack(c)
   stderr.write_line "[strling] finished extraction"
