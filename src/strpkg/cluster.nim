@@ -51,28 +51,6 @@ proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(L)
   s.pack(x.qname)
 
-proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
-  s.unpack(x.tid)
-  s.unpack(x.position)
-  s.unpack(x.repeat)
-  var f:uint16
-  s.unpack(f)
-  x.flag = Flag(f)
-  var split:uint8
-  s.unpack(split)
-  x.split = Soft(split)
-  s.unpack(x.mapping_quality)
-  s.unpack(x.repeat_count)
-  s.unpack(x.align_length)
-  var L:uint32 = 0
-  var qname: string
-  s.unpack(L)
-  qname = newString(L)
-  if L > 0'u32:
-    s.unpack(qname)
-  x.qname = qname
-
-
 type Cluster* = object
   reads*: seq[tread]
   left_most*: uint32
