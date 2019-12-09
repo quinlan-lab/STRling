@@ -5,6 +5,17 @@ import strformat
 import hts/bam
 import ./extract
 
+proc `==`(a, b:Target): bool =
+  return a.tid == b.tid and a.length == b.length and a.name == b.name
+
+proc same*(a:seq[Target], b:seq[Target]): bool =
+  if a.len != b.len:
+    return false
+  for i, aa in a:
+    if aa != b[i]:
+      return false
+  return true
+
 proc unpack_type[ByteStream](s: ByteStream, x: var tread) =
   s.unpack(x.tid)
   s.unpack(x.position)

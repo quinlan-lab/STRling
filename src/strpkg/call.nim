@@ -24,17 +24,6 @@ import ./unpack
 export tread
 export Soft
 
-proc `==`(a, b:Target): bool =
-  return a.tid == b.tid and a.length == b.length and a.name == b.name
-
-proc same(a:seq[Target], b:seq[Target]): bool =
-  if a.len != b.len:
-    return false
-  for i, aa in a:
-    if aa != b[i]:
-      return false
-  return true
-
 proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
@@ -105,7 +94,7 @@ proc call_main*() =
   fs.close()
   for r in extracted.reads:
     treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
-  # TODO: use other extracted stuffs here.
+  # TODO: Check all bin file came from the current version of STRling
   for k, trs in treads_by_tid_rep.mpairs:
     trs.sort(proc(a, b:tread): int =
       cmp(a.position, b.position)

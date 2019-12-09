@@ -10,6 +10,7 @@ import ./utils
 import ./genome_strs
 import ./extract
 import ./callclusters
+import ./unpack
 
 export tread
 export Soft
@@ -25,7 +26,6 @@ proc merge_main*() =
     option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
     flag("-v", "--verbose")
-    arg("bam", help="path to a single representitive bam or cram file (for extracting fragment size dist)")
     arg("bin", nargs = -1, help="One or more bin files previously created by `strling extract`")
 
   var argv = commandLineParams()
@@ -39,7 +39,6 @@ proc merge_main*() =
   if args.help:
     quit 0
 
-  var ibam_dist:Bam
   var window = parseInt(args.window)
   var min_support = parseInt(args.min_support)
   var min_clip = uint16(parseInt(args.min_clip))
@@ -51,51 +50,49 @@ proc merge_main*() =
     if not fileExists(args.bed):
       quit "couldn't open bed file"
 
-  if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
-    quit "couldn't open bam"
-
-  var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
-  discard ibam_dist.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
-
-  var frag_dist = ibam_dist.fragment_length_distribution(skip_reads=skip_reads)
-  var frag_median = frag_dist.median
-  var targets = ibam_dist.hdr.targets
-  if args.verbose:
-    stderr.write_line "Calculated median fragment length:", frag_median
-    stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
-  ibam_dist.close()
-  ibam_dist = nil
-
-  var opts = Options(median_fragment_length: frag_median,
-                      min_support: min_support, min_mapq: min_mapq)
-
-  # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
+  var targets: seq[Target]
+  var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
 
   for binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
-    var nreads = 0
-    while not fs.atEnd:
-      var t:tread
-      fs.unpack(t)
-      treads_by_tid_rep.mgetOrPut((t.tid, t.repeat), newSeq[tread]()).add(t)
-      nreads += 1
-    stderr.write_line &"[strling] read {nreads} STR reads from file: {binfile}"
+    var extracted = fs.unpack_file()
+    fs.close()
+
+    # TODO: Check all bin files came from the same version of STRling
+    # TODO: Check all bin files used the same strling extract settings
+
+    # Check all bin files are from the same reference genome (or at least have the same chroms)
+    if targets.len == 0:
+      targets = extracted.targets
+    else:
+      if not extracted.targets.same(targets):
+        quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
+
+    # Aggregate insert sizes for all samples
+    for i in 0..frag_dist.high:
+      var before = frag_dist[i]
+      frag_dist[i] += extracted.fragment_distribution[i]
+      doAssert frag_dist[i] >= before, "overflow"
+
+    # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
+    for r in extracted.reads:
+      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
+    stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
+
   for k, trs in treads_by_tid_rep.mpairs:
     trs.sort(proc(a, b:tread): int =
       cmp(a.position, b.position)
     )
 
-  #XXX check all bin files are from the same reference genome
+  if args.verbose:
+    stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
+    stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
-  var bounds_fh:File
-  if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
-    quit "couldn't open output file"
 
-  # Write header
-  bounds_fh.write_line(bounds_header)
+  var opts = Options(median_fragment_length: frag_dist.median(0.98),
+                      min_support: min_support, min_mapq: min_mapq)
 
-  #XXX this should already have been estimated for all samples? Record in bin and take average?
   if window < 0:
     window = frag_dist.median(0.98)
 
@@ -103,6 +100,12 @@ proc merge_main*() =
   if args.bed != "":
     # Parse bed file of regions and report spanning reads
     loci = parse_bed(args.bed, targets, window.uint32)
+
+  # Write bounds file with header
+  var bounds_fh:File
+  if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
+    quit "couldn't open output file"
+  bounds_fh.write_line(bounds_header)
 
   # Assign STR reads to provided loci
   for locus in loci:
