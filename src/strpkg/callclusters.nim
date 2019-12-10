@@ -33,6 +33,9 @@ proc assign_reads_locus*(locus: var Bounds, treads_by_tid_rep: TableRef[tid_rep,
       if ri < trs.high:
         treads_by_tid_rep[key].add(trs[ri + 1..trs.high])
 
+    # Force reporting of loci from input files
+    # even if they have insufficient supporting reads
+    locus.force_report = true 
     # Update read counts in Bounds
     locus.n_total = 0
     locus.n_left = 0
@@ -52,7 +55,8 @@ proc check_cluster*(c: Cluster, min_clip: uint16, min_clip_total: uint16): (Boun
   if b.right - b.left > 1000'u32:
     stderr.write_line "large bounds:" & $b & " skipping"
     return
-  # require left and right support
+  # require left and right support unless force_report is set
+  # i.e. when Bounds is from an input file rarather than a new cluster
   if not b.force_report:
     if b.n_left < min_clip: return
     if b.n_right < min_clip: return
