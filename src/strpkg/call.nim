@@ -32,6 +32,7 @@ proc call_main*() =
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
+    option("-b", "--bounds", help="STRling -bounds.txt file (usually produced by strling merge) specifying additional STR loci to genotype.")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
@@ -58,6 +59,10 @@ proc call_main*() =
   if args.loci != "":
     if not fileExists(args.loci):
       quit "couldn't open loci file"
+
+  if args.bounds != "":
+    if not fileExists(args.bounds):
+      quit "couldn't open bounds file"
 
   if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
@@ -123,43 +128,61 @@ proc call_main*() =
   reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
   gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
 
-  #TODO: read both a bounds file (from merge) and a bed file
-
   var loci: seq[Bounds]
   if args.loci != "":
     # Parse bed file of regions. These will also be genotyped
     loci = parse_bed(args.loci, opts.targets, opts.window.uint32)
     stderr.write_line &"Read {len(loci)} loci from {args.loci}"
 
+  var bounds: seq[Bounds]
+  if args.bounds != "":
+    # Parse -bounds.txt file of regions. These will also be genotyped
+    bounds = parse_bounds(args.bounds, opts.targets)
+    stderr.write_line &"Read {len(bounds)} bounds from {args.bounds}"
+
+  # Merge loci and bounds, with loci overwriting bounds
+  for bound in bounds.mitems:
+    for i, locus in loci:
+      if locus.overlaps(bound):
+        bound.name = locus.name
+        bound.left = locus.left
+        bound.right = locus.right
+        # Remove locus from loci (therefore will use first matching bound and locus)
+        loci.del(i)
+        break
+
+  # Add any remaining loci to bounds
+  for locus in loci:
+    bounds.add(locus)
+
   var unplaced_counts = initCountTable[string]()
   var genotypes_by_repeat = initTable[string, seq[Call]]()
 
-  # Assign STR reads to provided loci and genotype them
-  for locus in loci:
-    var str_reads = assign_reads_locus(locus, treads_by_tid_rep)
-    # Report spanning reads/pairs for any remaining loci that were not matched with a bound
-    if locus.right - locus.left > 1000'u32:
-      stderr.write_line "large bounds:" & $locus & " skipping"
+  # Assign STR reads to provided bounds and genotype them
+  for bound in bounds.mitems:
+    var str_reads = assign_reads_locus(bound, treads_by_tid_rep)
+    if bound.right - bound.left > 1000'u32:
+      stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    var (spans, median_depth) = ibam.spanners(locus, opts.window, frag_dist, opts.min_mapq)
+    var (spans, median_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
     if spans.len > 5_000:
       when defined(debug):
-        stderr.write_line &"High depth for bound {opts.targets[locus.tid].name}:{locus.left}-{locus.right} got {spans.len} pairs. Skipping."
+        stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
       continue
     if median_depth == -1:
       continue
 
-    var gt = genotype(locus, str_reads, spans, opts.targets, float(median_depth))
+    var gt = genotype(bound, str_reads, spans, opts.targets, float(median_depth))
 
-    var canon_repeat = locus.repeat.canonical_repeat
+    var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
       genotypes_by_repeat[canon_repeat] = @[]
     genotypes_by_repeat[canon_repeat].add(gt)
 
     #var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line locus.tostring(opts.targets) & "\t" & $median_depth
+    bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
     for s in spans:
-      span_fh.write_line s.tostring(locus, opts.targets[locus.tid].name)
+      span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
 
 
   # Cluster remaining reads and genotype

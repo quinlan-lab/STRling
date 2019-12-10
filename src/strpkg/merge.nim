@@ -108,7 +108,7 @@ proc merge_main*() =
   bounds_fh.write_line(bounds_header)
 
   # Assign STR reads to provided loci
-  for locus in loci:
+  for locus in loci.mitems:
     var str_reads = assign_reads_locus(locus, treads_by_tid_rep)
     bounds_fh.write_line locus.tostring(opts.targets)
 

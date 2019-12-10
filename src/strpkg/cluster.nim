@@ -159,6 +159,7 @@ proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
 # Parse an STRling bounds file
 proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
   for line in lines f:
+    if line.startswith("#"): continue
     result.add(parse_boundsline(string(line), targets))
 
 
@@ -325,10 +326,10 @@ iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:in
   if reps.len > 0:
     doAssert reps[0].tid == reps[reps.high].tid and reps[0].repeat == reps[reps.high].repeat
 
-  if reps[0].tid < 0:
-    #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
-    yield Cluster(reads: reps)
-  else:
-    for c in trcluster(reps, max_dist, min_supporting_reads):
-      yield c
+    if reps[0].tid < 0:
+      #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
+      yield Cluster(reads: reps)
+    else:
+      for c in trcluster(reps, max_dist, min_supporting_reads):
+        yield c
 

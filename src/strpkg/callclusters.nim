@@ -9,8 +9,9 @@ import ./genotyper
 import ./genome_strs
 import ./extract
 
-# returns reads assign to locus and removes them from table
-proc assign_reads_locus*(locus: Bounds, treads_by_tid_rep: TableRef[tid_rep, seq[tread]]): seq[tread] =
+# returns reads assign to locus and removes them from table.
+# Updates Bounds with number of supporting reads
+proc assign_reads_locus*(locus: var Bounds, treads_by_tid_rep: TableRef[tid_rep, seq[tread]]): seq[tread] =
     var key: tid_rep = (locus.tid, locus.repeat.as_array)
     var trs = treads_by_tid_rep.getOrDefault(key, @[])
     
@@ -20,18 +21,28 @@ proc assign_reads_locus*(locus: Bounds, treads_by_tid_rep: TableRef[tid_rep, seq
     var ri = upperBound(trs, tread(position: locus.right_most), proc(a, b:tread):int =
       return cmp(a.position, b.position)
     )
-    stderr.write_line "[strling] got {ri - li} treads for locus: {locus} with indexes {li}..{ri}"
+    when defined(debug):
+      stderr.write_line &"[strling] got {ri - li} treads for locus: {locus} with indexes {li}..{ri}"
     
     if trs.len > 0:
       # now we have a the subset of treads that support the given locus
-      result = trs[li..ri]
-
-      #XXX TODO: Count up the number of supporting reads and record in Bounds
+      result = trs[li..<ri]
 
       # remove these from the table
       treads_by_tid_rep[key] = trs[0..<li]
       if ri < trs.high:
         treads_by_tid_rep[key].add(trs[ri + 1..trs.high])
+
+    # Update read counts in Bounds
+    locus.n_total = 0
+    locus.n_left = 0
+    locus.n_right = 0
+    for r in result:
+      locus.n_total.inc
+      if r.split == Soft.right:
+        locus.n_right.inc
+      elif r.split == Soft.left:
+        locus.n_left.inc
 
 proc check_cluster*(c: Cluster, min_clip: uint16, min_clip_total: uint16): (Bounds, bool) =
   if c.reads.len >= uint16.high.int:

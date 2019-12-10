@@ -3,6 +3,8 @@ import msgpack4nim
 export msgpack4nim
 import strformat
 import hts/bam
+import strutils
+
 import ./extract
 
 proc `==`(a, b:Target): bool =
@@ -48,7 +50,8 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0): tuple[targets
   var softVersion: array[9, char]
   fs.read(softVersion)
 
-  stderr.write_line &"[strling] read format version {fmtVersion} from software version {softVersion}"
+  var softVersionString = softVersion.join()
+  stderr.write_line &"[strling] read format version {fmtVersion} from software version {softVersionString}"
 
   var proportion_repeat: float32
   fs.read(proportion_repeat)
@@ -69,7 +72,7 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0): tuple[targets
   result.targets = h.targets
   var n_reads:int32
   fs.read(n_reads)
-  stderr.write_line &"[strling] reading {n_reads} from bin file"
+  stderr.write_line &"[strling] reading {n_reads} STR reads from bin file"
 
   while not fs.atEnd:
     var t:tread
