@@ -108,10 +108,10 @@ proc spanning_pairs_est(reads: seq[Support]): Evidence =
 # of counts of str repeat units in the anchored reads
 # result is in bp insertion from the reference
 proc anchored_lm(sum_str_counts: uint, depth: float): float =
-  #XXX These estimates are from the HTT simulation linear model, need to generalize
-  var cofficient = 1.106
-  var intercept = 3.348
-  var y = log2(float(sum_str_counts)/(depth + 1) + 1) * cofficient + intercept
+  #XXX These estimates are from the HTT simulation linear model, would be nice to generalize
+  var intercept = 4.35
+  var cofficient = 0.9209
+  var y = log2(float(sum_str_counts)/depth + 1) * cofficient + intercept
   return pow(2,y)
 
 proc sum_str_est(reads: seq[tread], depth: float): Evidence =
@@ -124,8 +124,8 @@ proc sum_str_est(reads: seq[tread], depth: float): Evidence =
 
 proc unplaced_est(unplaced_count: int, depth: float): float =
   # Estimate size in bp using number of unplaced reads
-  var cofficient = 1.066674
-  var intercept = 8.029485
+  var intercept = 8.358
+  var cofficient = 0.803
   var y = log2(float(unplaced_count)/depth + 1) * cofficient + intercept
   result = pow(2,y)
 
