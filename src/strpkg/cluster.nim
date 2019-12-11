@@ -226,6 +226,9 @@ proc trim(cl:var Cluster, max_dist:uint32) =
   while len(cl.reads) > 1 and cl.reads[0].position < lo:
     cl.reads = cl.reads[1..cl.reads.high]
 
+proc id*(b:Bounds, targets: seq[Target]): string =
+  return &"{targets[b.tid].name}-{b.left}-{b.repeat}"
+
 proc tostring*(b:Bounds, targets: seq[Target]): string =
   return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.left_most}\t{b.right_most}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 

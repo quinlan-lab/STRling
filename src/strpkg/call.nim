@@ -183,7 +183,9 @@ proc call_main*() =
     bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
     for s in spans:
       span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
-
+    var locusid = bound.id(opts.targets)
+    for r in str_reads:
+      reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
 
   # Cluster remaining reads and genotype
   var ci = 0
