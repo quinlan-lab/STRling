@@ -117,10 +117,24 @@ str_extract = {
             $STR_NIM extract
                 -f $REF
                 -g $str_ref
-                -p 0.8
                 -v
                 $input.bam
                 $output.bin
+        """
+    }
+}
+
+str_merge = {
+
+    output.dir = "str"
+
+    from("*.bin") produce("strling-bounds.txt") {
+        exec """
+            $STR_NIM merge
+                -f $REF
+                -v
+                -o ${output.dir + '/strling'}
+                $inputs.bin
         """
     }
 }
@@ -129,13 +143,18 @@ str_call = {
 
     output.dir = "str"
 
-    def bamname = get_fname(input.bam)
+    def sample = branch.name.prefix
 
-    produce(bamname.prefix + "-reads.txt", bamname.prefix + "-bounds.txt") {
+    from (sample + ".str.bin", sample + ".bam", "strling-bounds.txt") produce(
+            sample + "-reads.txt", sample + "-bounds.txt",
+            sample + "-spanning.txt", sample + "-unplaced.txt",
+            sample + "-genotype.txt") {
+    
+        def bamname = get_fname(input.bam)
         exec """
             $STR_NIM call
                 -v
-                -l $HTT_regions
+                -b $input.txt
                 -o ${output.dir + '/' + bamname.prefix}
                 $input.bam
                 $input.bin
