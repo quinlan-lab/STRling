@@ -126,7 +126,7 @@ proc call_main*() =
   # Write headers
   bounds_fh.write_line(bounds_header & "\tdepth")
   reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
-  gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
+  gt_fh.write_line(gt_header)
 
   var loci: seq[Bounds]
   if args.loci != "":
