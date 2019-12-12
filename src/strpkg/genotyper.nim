@@ -34,7 +34,6 @@ type Call* = object
   # total allele sizes in repeat units
   allele1: float
   allele2: float
-  allele_unplaced: float
   # and confidence intervals around the allele size esimates
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
@@ -48,10 +47,10 @@ type Call* = object
   sum_str_counts: uint
   # ...
 
-const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tallele_unplaced\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
+const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.allele_unplaced:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -170,6 +169,5 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
 proc update_genotype*(call: var Call, unplaced_reads: int) =
   var RUlen = len(call.repeat)
   call.unplaced_reads = unplaced_reads
-  call.allele_unplaced = unplaced_est(unplaced_reads, call.depth)/float(RUlen)
   if unplaced_reads > 2:
-    call.allele2 = call.allele_unplaced
+    call.allele2 = unplaced_est(unplaced_reads, call.depth)/float(RUlen)
