@@ -136,6 +136,7 @@ proc unplaced_est(unplaced_count: int, depth: float): float =
 
 proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
               opts: Options, depth: float): Call =
+  result = Call()
   result.chrom = get_chrom(b.tid, opts.targets)
   result.start = b.left
   result.stop = b.right
