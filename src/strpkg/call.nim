@@ -86,6 +86,7 @@ proc call_main*() =
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
   var opts = Options(median_fragment_length: frag_median,
+                      min_clip: min_clip, min_clip_total: min_clip_total,
                       min_support: min_support, min_mapq: min_mapq,
                       window: frag_dist.median(0.98),
                       targets: ibam.hdr.targets)
@@ -172,7 +173,7 @@ proc call_main*() =
     if median_depth == -1:
       continue
 
-    var gt = genotype(bound, str_reads, spans, opts.targets, float(median_depth))
+    var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
 
     var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -211,7 +212,7 @@ proc call_main*() =
       if median_depth == -1:
         continue
 
-      var gt = genotype(b, c.reads, spans, opts.targets, float(median_depth))
+      var gt = genotype(b, c.reads, spans, opts, float(median_depth))
 
       var canon_repeat = b.repeat.canonical_repeat
       if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -227,15 +228,19 @@ proc call_main*() =
         reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
       ci += 1
 
-  # Loop through again and refine genotypes
+  # Loop through again and refine genotypes for loci that are the only
+  # large expansion with that repeat unit
   for repeat, genotypes in genotypes_by_repeat:
-    if len(genotypes) == 1:
-      var gt = genotypes[0]
-      gt.update_genotype(unplaced_counts[repeat])
+    var gt_expanded: seq[Call]
+    for gt in genotypes:
+      if gt.is_large:
+        gt_expanded.add(gt)
+        if gt_expanded.len > 1:
+          break
+    if gt_expanded.len == 1:
+      gt_expanded[0].update_genotype(unplaced_counts[repeat])
+    for gt in genotypes:
       gt_fh.write_line gt.tostring()
-    else:
-      for gt in genotypes:
-        gt_fh.write_line gt.tostring()
 
   for repeat, count in unplaced_counts:
       unplaced_fh.write_line &"{repeat}\t{count}"

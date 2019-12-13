@@ -121,6 +121,8 @@ type Options* = object
   proportion_repeat*: float
   min_mapq*: uint8
   min_support*: int
+  min_clip*: uint16
+  min_clip_total*: uint16
   window*: int
   targets*: seq[Target]
 

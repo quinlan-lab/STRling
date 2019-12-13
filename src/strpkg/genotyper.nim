@@ -25,7 +25,7 @@ type Evidence = object
   supporting_reads: uint
   sum_str_counts: uint
  
-type Call* = object
+type Call* = ref object
   chrom: string
   start: uint
   stop: uint
@@ -45,6 +45,7 @@ type Call* = object
   unplaced_reads: int # only used for genotypes with unique repeat units
   depth: float #median depth in region
   sum_str_counts: uint
+  is_large*: bool
   # ...
 
 const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
@@ -134,8 +135,8 @@ proc unplaced_est(unplaced_count: int, depth: float): float =
   result = pow(2,y)
 
 proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
-              targets: seq[Target], depth: float): Call =
-  result.chrom = get_chrom(b.tid, targets)
+              opts: Options, depth: float): Call =
+  result.chrom = get_chrom(b.tid, opts.targets)
   result.start = b.left
   result.stop = b.right
   result.left_clips = b.n_left
@@ -154,6 +155,11 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
 
     var spanning_pairs_est = spanning_pairs_est(spanners)
     result.spanning_pairs = spanning_pairs_est.supporting_reads
+
+  # Set is_large to true for very minimal requirements same as for a bound to be called.
+  # XXX probably too lenient
+  result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support
+
 
   # Use anchored reads to estimate long allele
   var sum_str_est = sum_str_est(tandems, depth)
