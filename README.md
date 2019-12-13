@@ -52,8 +52,8 @@ The main output file is `{$prefix}-genotype.txt`. It reports all STR expansion l
 - left: predicted left boundry of STR locus
 - right: predicted right boundry of STR locus
 - repeatunit: predicted STR repeat unit
-- allele1\_est: estimated size of the shorter allele in repeat units, from spanning reads (if any)
-- allele2\_est: estimated size of the larger allele in repeat units, from anchored reads
+- allele1\_est: estimated size of the shorter allele in repeat units relative to the reference, from spanning reads (if any). "na" indicats no reads support an allele shorter than the read length, so both may be large.
+- allele2\_est: estimated size of the larger allele in repeat units relative to the reference, from anchored reads
 - total\_reads: number of reads supporting an expansion at this locus
 - spanning\_reads: number of reads that span the locus
 - spanning\_pairs: number of read pairs that span the locus
