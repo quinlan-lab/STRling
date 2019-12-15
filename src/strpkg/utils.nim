@@ -286,9 +286,7 @@ proc as_array*(s:string): array[6, char] =
 
 # Get a chromosome name for a given tid
 proc get_chrom*(tid:int, targets: seq[Target]): string =
-  for t in targets:
-    if t.tid == tid:
-      return t.name
+  return targets[tid].name
 
 proc `<`(a: array[6, char], b: array[6, char]): bool {.inline.} =
   if a[0] != b[0]:
