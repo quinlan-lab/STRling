@@ -9,12 +9,6 @@ import hts/bam
 import strutils
 import utils
 
-#import ./collect
-#import ./utils
-#import ./genotyper
-#import ./genome_strs
-#import ./extract
-
 type tid_rep* = tuple[tid:int32, repeat: array[6, char]]
 
 type Soft* {.size:1, pure.} = enum
@@ -124,12 +118,13 @@ proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   result.repeat = l_split[3]
   result.left_most = result.left - window
   result.right_most = result.right + window
+  # TODO Check if left_most and right_most are within the chromosome
   
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
-  doAssert(result.left <= result.right)
-
+  doAssert(result.left <= result.right, &"{l}")
+  doAssert(result.left_most <= result.right_most, &"{l}")
 # Parse an STR loci bed file
 proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
   for line in lines f:
@@ -154,7 +149,8 @@ proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
-  doAssert(result.left <= result.right)
+  doAssert(result.left <= result.right, &"{l}")
+  doAssert(result.left_most <= result.right_most, &"{l}")
 
 # Parse an STRling bounds file
 proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
@@ -219,6 +215,11 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       result.left = result.right - 1
 
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
+  doAssert(result.left_most <= result.left, &"{result}")
+  doAssert(result.right_most >= result.right, &"{result}")
+
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
@@ -230,6 +231,9 @@ proc id*(b:Bounds, targets: seq[Target]): string =
   return &"{targets[b.tid].name}-{b.left}-{b.repeat}"
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
+  doAssert(b.left_most <= b.right_most, &"{b}")
+  doAssert(b.left_most <= b.left, &"{b}")
+  doAssert(b.right_most >= b.right, &"{b}")
   return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.left_most}\t{b.right_most}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
@@ -279,6 +283,10 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
 
       c1.right_most = mid - 1
       c2.left_most = mid
+
+      doAssert(c1.left_most <= c1.right_most, &"{c1}")
+      doAssert(c2.left_most <= c2.right_most, &"{c2}")
+
       yield c1
       yield c2
 
@@ -320,6 +328,9 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
   c.trim(max_dist + 100)
   c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
   c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
+
+  doAssert(c.left_most <= c.right_most)
+
   if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
