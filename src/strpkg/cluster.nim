@@ -116,15 +116,17 @@ proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
-  result.left_most = result.left - window
-  result.right_most = result.right + window
-  # TODO Check if left_most and right_most are within the chromosome
-  
+  # Ensure left_most and right_most are within the chromosome
+  # (convert uint to int to allow negative numbers)
+  result.left_most = uint32(max(int32(result.left) - int32(window), 0))
+  result.right_most = min(result.right + window, targets[result.tid].length)
+
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
-  doAssert(result.left <= result.right, &"{l}")
-  doAssert(result.left_most <= result.right_most, &"{l}")
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
+
 # Parse an STR loci bed file
 proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
   for line in lines f:
@@ -170,8 +172,6 @@ proc bounds*(cl:Cluster): Bounds =
     if c == 0.char: break
     result.repeat.add(c)
   result.tid = cl.reads[0].tid
-  result.left_most = cl.left_most
-  result.right_most = cl.right_most
   doAssert cl.reads.len <= uint16.high.int, ("got too many reads for cluster with first read:" & $cl.reads[0])
 
   for r in cl.reads:
@@ -215,10 +215,24 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       result.left = result.right - 1
 
+  # Set the positions of the left and right most informative reads
+  if int(cl.left_most) > 0:
+    result.left_most = cl.left_most
+  else:
+    result.left_most = posns.min()
+  if int(cl.right_most) > 0:
+    result.right_most = cl.right_most
+  else:
+    result.right_most = posns.max()
+
+  # XXX this correction may be hiding a bug elsewhere
+  if result.left_most > result.left:
+    result.left_most = result.left
+  if result.right_most < result.right:
+    result.right_most = result.right
+
   doAssert(result.left <= result.right, &"{result}")
   doAssert(result.left_most <= result.right_most, &"{result}")
-  doAssert(result.left_most <= result.left, &"{result}")
-  doAssert(result.right_most >= result.right, &"{result}")
 
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
@@ -283,9 +297,6 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
 
       c1.right_most = mid - 1
       c2.left_most = mid
-
-      doAssert(c1.left_most <= c1.right_most, &"{c1}")
-      doAssert(c2.left_most <= c2.right_most, &"{c2}")
 
       yield c1
       yield c2
