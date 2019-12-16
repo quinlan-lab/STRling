@@ -114,7 +114,7 @@ proc anchored_lm(sum_str_counts: uint, depth: float): float =
   #XXX These estimates are from the HTT simulation linear model, would be nice to generalize
   var intercept = 4.35
   var cofficient = 0.9209
-  var y = log2(float(sum_str_counts)/depth + 1) * cofficient + intercept
+  var y = log2(float64(sum_str_counts)/max(1, depth) + 1) * cofficient + intercept
   return pow(2,y)
 
 proc sum_str_est(reads: seq[tread], depth: float): Evidence =
@@ -151,7 +151,8 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
     result.allele1 = NaN
   else:
     var spanning_read_est = spanning_read_est(spanners)
-    result.allele1 = spanning_read_est.allele1_bp/float(max(1, RUlen))
+    if spanning_read_est.allele1_bp.classify != fcNaN:
+      result.allele1 = spanning_read_est.allele1_bp/float(max(1, RUlen))
     result.spanning_reads = spanning_read_est.supporting_reads
 
     var spanning_pairs_est = spanning_pairs_est(spanners)
