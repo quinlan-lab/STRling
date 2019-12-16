@@ -68,7 +68,7 @@ proc repeat_length(t:tread): uint8 {.inline.} =
 
 template p_repeat(t:tread): float =
   # proportion repeat
-  float(t.repeat_count * t.repeat_length) / t.align_length.float
+  float(t.repeat_count * t.repeat_length) / max(1'u8, t.align_length).float
 
 template after_mate(aln:Record): bool {.dirty.} =
   (aln.tid > aln.mate_tid or (aln.tid == aln.mate_tid and ((aln.start > aln.mate_pos) or (aln.start == aln.mate_pos and cache.tbl.hasKey(aln.qname)))))

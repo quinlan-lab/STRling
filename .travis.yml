@@ -1,7 +1,6 @@
 language: c
 before_install:
     - base=$(pwd)
-    - echo $base
     - git clone --recursive https://github.com/samtools/htslib.git
     - cd htslib && git checkout 1.9 && autoheader && autoconf && ./configure --enable-libcurl
     - cd ..
