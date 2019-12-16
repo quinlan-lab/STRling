@@ -9,12 +9,6 @@ import hts/bam
 import strutils
 import utils
 
-#import ./collect
-#import ./utils
-#import ./genotyper
-#import ./genome_strs
-#import ./extract
-
 type tid_rep* = tuple[tid:int32, repeat: array[6, char]]
 
 type Soft* {.size:1, pure.} = enum
@@ -122,13 +116,16 @@ proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
-  result.left_most = result.left - window
-  result.right_most = result.right + window
-  
+  # Ensure left_most and right_most are within the chromosome
+  # (convert uint to int to allow negative numbers)
+  result.left_most = uint32(max(int32(result.left) - int32(window), 0))
+  result.right_most = min(result.right + window, targets[result.tid].length)
+
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
-  doAssert(result.left <= result.right)
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
 
 # Parse an STR loci bed file
 proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
@@ -154,7 +151,8 @@ proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
   for x in result.repeat:
     if x notin "ATCG":
       quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
-  doAssert(result.left <= result.right)
+  doAssert(result.left <= result.right, &"{l}")
+  doAssert(result.left_most <= result.right_most, &"{l}")
 
 # Parse an STRling bounds file
 proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
@@ -174,8 +172,6 @@ proc bounds*(cl:Cluster): Bounds =
     if c == 0.char: break
     result.repeat.add(c)
   result.tid = cl.reads[0].tid
-  result.left_most = cl.left_most
-  result.right_most = cl.right_most
   doAssert cl.reads.len <= uint16.high.int, ("got too many reads for cluster with first read:" & $cl.reads[0])
 
   for r in cl.reads:
@@ -219,6 +215,25 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       result.left = result.right - 1
 
+  # Set the positions of the left and right most informative reads
+  if int(cl.left_most) > 0:
+    result.left_most = cl.left_most
+  else:
+    result.left_most = posns.min()
+  if int(cl.right_most) > 0:
+    result.right_most = cl.right_most
+  else:
+    result.right_most = posns.max()
+
+  # XXX this correction may be hiding a bug elsewhere
+  if result.left_most > result.left:
+    result.left_most = result.left
+  if result.right_most < result.right:
+    result.right_most = result.right
+
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
+
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
@@ -230,6 +245,9 @@ proc id*(b:Bounds, targets: seq[Target]): string =
   return &"{targets[b.tid].name}-{b.left}-{b.repeat}"
 
 proc tostring*(b:Bounds, targets: seq[Target]): string =
+  doAssert(b.left_most <= b.right_most, &"{b}")
+  doAssert(b.left_most <= b.left, &"{b}")
+  doAssert(b.right_most >= b.right, &"{b}")
   return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.left_most}\t{b.right_most}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
@@ -279,6 +297,7 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
 
       c1.right_most = mid - 1
       c2.left_most = mid
+
       yield c1
       yield c2
 
@@ -320,6 +339,9 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
   c.trim(max_dist + 100)
   c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
   c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
+
+  doAssert(c.left_most <= c.right_most)
+
   if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
     for sc in c.split_cluster(min_supporting_reads):
       yield sc

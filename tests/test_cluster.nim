@@ -75,6 +75,8 @@ suite "cluster suite":
     var b = cl.bounds
     check b.left == 223
     check b.right == 253
+    check b.left_most == 123
+    check b.right_most == 283
 
   test "test bounds: no soft-clipped reads so use median":
     var reads = @[
@@ -226,5 +228,21 @@ suite "cluster suite":
        tread(tid: 10, position: 92611833, split: Soft.right),
        tread(tid: 10, position: 92611921, split: Soft.none),
        tread(tid: 10, position: 92611939, split: Soft.none)]
+    var b = Cluster(reads: tr).bounds
+    check b.left < b.right
+
+  test "right_most bug":
+    var tr = @[
+      tread(tid: 5, position: 34847227, split: Soft.left),
+      tread(tid: 5, position: 34847227, split: Soft.none),
+      tread(tid: 5, position: 34847883, split: Soft.left),
+      tread(tid: 5, position: 34847911, split: Soft.none),
+      tread(tid: 5, position: 34847921, split: Soft.left),
+      tread(tid: 5, position: 34847921, split: Soft.left),
+      tread(tid: 5, position: 34847930, split: Soft.none),
+      tread(tid: 5, position: 34848950, split: Soft.left),
+      tread(tid: 5, position: 34848950, split: Soft.left),
+      tread(tid: 5, position: 34848950, split: Soft.left)]
+
     var b = Cluster(reads: tr).bounds
     check b.left < b.right
