@@ -134,7 +134,7 @@ proc percentile*(fragment_sizes: array[4096, uint32], fragment_length:int): floa
     s += cnt.int
     if i >= fragment_length: break
 
-  return s.float / total.float
+  return s.float / max(1'u32, total).float
 
 proc median*(fragment_sizes: array[4096, uint32], pct:float=0.5): int =
   var n = sum(fragment_sizes)

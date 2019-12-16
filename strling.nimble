@@ -26,6 +26,6 @@ srcDir = "src"
 skipDirs = @["tests"]
 
 task test, "run the tests":
-  exec "nim c --lineDir:on --debuginfo -r tests/all"
+  exec "nim c -x:on --lineDir:on --debuginfo -r tests/all"
 
 
