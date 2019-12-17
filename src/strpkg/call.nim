@@ -109,25 +109,28 @@ proc call_main*() =
   ### discovery
   var
     gt_fh:File
-    reads_fh:File
     bounds_fh:File
-    span_fh:File
     unplaced_fh:File
   if not open(gt_fh, args.output_prefix & "-genotype.txt", mode=fmWrite):
     quit "couldn't open output file"
-  if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
-    quit "couldn't open output file"
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
-    quit "couldn't open output file"
-  if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(unplaced_fh, args.output_prefix & "-unplaced.txt", mode=fmWrite):
     quit "couldn't open output file"
 
   # Write headers
   bounds_fh.write_line(bounds_header & "\tdepth")
-  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
   gt_fh.write_line(gt_header)
+
+  when defined(debug):
+    var
+      reads_fh:File
+      span_fh:File
+    if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
+      quit "couldn't open output file"
+    if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
+      quit "couldn't open output file"
+    reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
 
   var loci: seq[Bounds]
   if args.loci != "":
@@ -182,11 +185,12 @@ proc call_main*() =
 
     #var estimate = spans.estimate_size(frag_dist)
     bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
-    for s in spans:
-      span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
-    var locusid = bound.id(opts.targets)
-    for r in str_reads:
-      reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
+    when defined(debug):
+      for s in spans:
+        span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
+      var locusid = bound.id(opts.targets)
+      for r in str_reads:
+        reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
 
   # Cluster remaining reads and genotype
   var ci = 0
@@ -222,10 +226,11 @@ proc call_main*() =
       #var estimate = spans.estimate_size(frag_dist)
       bounds_fh.write_line b.tostring(opts.targets) & "\t" & $median_depth
 
-      for s in spans:
-        span_fh.write_line s.tostring(b, opts.targets[b.tid].name)
-      for s in c.reads:
-        reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
+      when defined(debug):
+        for s in spans:
+          span_fh.write_line s.tostring(b, opts.targets[b.tid].name)
+        for s in c.reads:
+          reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
       ci += 1
 
   # Loop through again and refine genotypes for loci that are the only
@@ -246,15 +251,16 @@ proc call_main*() =
       unplaced_fh.write_line &"{repeat}\t{count}"
 
   gt_fh.close
-  reads_fh.close
   bounds_fh.close
-  span_fh.close
   unplaced_fh.close
+  when defined(debug):
+    span_fh.close
+    reads_fh.close
+    stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
+    stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
   if args.verbose:
     stderr.write_line &"Supporting evidence used to make the genotype calls:"
     stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
-    stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
-    stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
     stderr.write_line &"wrote counts of unplaced reads with STR content to {args.output_prefix}-unplaced.txt"
     stderr.write_line &"Main results file:"
     stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
