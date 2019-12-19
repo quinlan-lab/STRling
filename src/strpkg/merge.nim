@@ -24,7 +24,7 @@ proc merge_main*() =
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
-    option("-o", "--output-prefix", help="prefix for output files", default="strling")
+    option("-o", "--output-prefix", help="prefix for output files. Suffix will be -bounds.txt", default="strling")
     flag("-v", "--verbose")
     arg("bin", nargs = -1, help="One or more bin files previously created by `strling extract`")
 
