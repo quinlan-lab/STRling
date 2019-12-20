@@ -111,6 +111,8 @@ proc spanning_pairs_est(reads: seq[Support]): Evidence =
 # of counts of str repeat units in the anchored reads
 # result is in bp insertion from the reference
 proc anchored_lm(sum_str_counts: uint, depth: float): float =
+  if sum_str_counts == 0:
+    return NaN
   #XXX These estimates are from the HTT simulation linear model, would be nice to generalize
   var intercept = 4.35
   var cofficient = 0.9209
