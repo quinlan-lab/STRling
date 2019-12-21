@@ -10,7 +10,7 @@ template thisModuleFile: string = instantiationInfo(fullPaths = true).filename
 #  # When the package is installed, the ``src`` directory disappears.
 #  import strpkg/version as _
 
-version       = "0.0.2"
+version       = "0.1.0"
 author        = "Harriet and Brent"
 description   = "Novel STR caller"
 license       = "MIT"
