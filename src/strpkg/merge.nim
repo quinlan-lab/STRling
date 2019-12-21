@@ -122,7 +122,7 @@ proc merge_main*() =
 
       var b: Bounds
       var good_cluster: bool
-      (b, good_cluster) = check_cluster(c, min_clip, min_clip_total)
+      (b, good_cluster) = bounds(c, min_clip, min_clip_total)
       if good_cluster == false:
         continue
 

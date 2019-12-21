@@ -342,11 +342,9 @@ proc extract_main*() =
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
     quit "[strling] couldnt open binary output file"
-  # TODO: write min_mapq, proportion repeat to start of bin file
-  # TODO: write bam header and window = frag_dist.median(0.98)
 
   fs.write("STR")
-  fs.write(0'i16)
+  fs.write(thisFmtVersion)
   fs.write(strlingVersion.asArray9)
   fs.write(proportion_repeat.float32)
   fs.write(min_mapq.uint8)
