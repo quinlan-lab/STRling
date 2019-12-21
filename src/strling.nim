@@ -1,9 +1,11 @@
-import ./strpkg/extract
-import ./strpkg/merge
-import ./strpkg/call
 import tables
 import os
 import strformat
+
+import ./strpkg/extract
+import ./strpkg/merge
+import ./strpkg/call
+import ./strpkg/version
 
 proc main*() =
 
@@ -18,6 +20,7 @@ proc main*() =
     }.toOrderedTable
   var args = commandLineParams()
 
+  stderr.write_line &"\nstrling version: {strlingVersion}"
   if len(args) == 0 or not (args[0] in dispatcher):
     stderr.write_line "\nCommands: "
     for k, v in dispatcher:
