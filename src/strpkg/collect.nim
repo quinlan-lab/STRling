@@ -7,7 +7,14 @@ import math
 import ./cluster
 import ./utils
 
+type SupportType* {.pure.} = enum
+    SpanningFragment # A spanning pair of reads definine a fragment
+    SpanningRead # A read that spans the locus
+    OverlappingRead # A read that overlaps but does not span the locus (e.g. is soft-clipped)
+
 type Support* = object
+  Type*: SupportType
+  
   # if SpanningFragmentLength is non-zero, we are looking at a Fragment
   # and all other fields will be 0
   SpanningFragmentLength*: uint32
@@ -24,7 +31,7 @@ type Support* = object
   qname: string
 
 proc tostring*(s:Support, b:Bounds, chrom:string): string =
-  result = &"{chrom}\t{b.left}\t{b.right}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}\t{s.qname}"
+  result = &"{chrom}\t{b.left}\t{b.right}\t{s.Type}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}\t{s.qname}"
 
 proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, frag_sizes: array[4096, uint32]): bool =
   doAssert L.start <= R.start
@@ -33,6 +40,7 @@ proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, 
   if bound_width < 5: # Add extra slop for very small bounds
     slop += (5 - bound_width)
   if L.start < (bounds.left.int - slop) and R.stop > (bounds.right.int + slop):
+    support.Type = SupportType.SpanningFragment
     support.SpanningFragmentLength = max(1'u32, L.isize.abs.uint32)
     support.SpanningFragmentPercentile = frag_sizes.percentile(support.SpanningFragmentLength.int)
     support.repeat = bounds.repeat
@@ -81,23 +89,29 @@ proc count(A: Record, bounds:Bounds): int =
 
   return dna[read_left..<read_right].count(bounds.repeat)
 
-proc spanning_read*(A:Record, bounds:Bounds, support: var Support): bool =
+# Returns true if a read overlaps the bounds. Also records if the read spans
+# and counts STRs
+proc overlapping_read*(A:Record, bounds:Bounds, support: var Support): bool =
   var bound_width = bounds.right.int - bounds.left.int
   var slop = bounds.repeat.len - 1
   if bound_width < 5: # Add extra slop for very small bounds
     slop += (5 - bound_width)
-  if A.start < (bounds.left.int - slop) and A.stop > (bounds.right.int + slop):
-
-    # just do a count directly
+  # Check if read overlaps bounds
+  if A.overlaps(bounds):
+    result = true
+    support.Type = SupportType.OverlappingRead
+    # Count STRs
     support.SpanningReadRepeatCount = A.count(bounds).uint8
     support.qname = A.qname
 
-    for cig in A.cigar:
-      if cig.op == Cigarop.insert:
-        support.SpanningReadCigarInsertionLen += cig.len.uint8
-      if cig.op == Cigarop.deletion:
-        support.SpanningReadCigarDeletionLen += cig.len.uint8
-    result = true
+    # Check if read completely spans bounds
+    if A.start < (bounds.left.int - slop) and A.stop > (bounds.right.int + slop):
+      support.Type = SupportType.SpanningRead
+      for cig in A.cigar:
+        if cig.op == Cigarop.insert:
+          support.SpanningReadCigarInsertionLen += cig.len.uint8
+        if cig.op == Cigarop.deletion:
+          support.SpanningReadCigarDeletionLen += cig.len.uint8
 
 proc estimate_size*(spanners: seq[Support], frag_sizes: array[4096, uint32]): int =
   var small_sizes = newSeq[uint32]()
@@ -123,7 +137,7 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      depths[min(depths.high, aln.stop - window_left - 1)] -= 1
 
      var s:Support
-     if aln.spanning_read(bounds, s):
+     if aln.overlapping_read(bounds, s):
        result.support.add(s)
      if aln.tid != aln.mate_tid: continue
      if aln.isize.abs > max_size: continue
@@ -132,10 +146,13 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      # but deleting from a table is not cheap so current trade-off memory for speed.
      # should instead add a reduced object with chrom, sequence, cigar
      pairs.mgetOrPut(aln.qname, @[]).add(aln.copy())
+     when defined(debug):
+      if pairs.len mod 5000 == 0:
+        stderr.write_line "memory usage. number of pairs:", pairs.len, " bounds:", bounds
+     if pairs.len > 20_000:
+       stderr.write_line "high-depth for bounds:", bounds, " skipping"
+       return (@[], -1)
 
-  when defined(debug):
-    if pairs.len > 5_000:
-      stderr.write_line "large pairs seq in spanners() for " & $bounds & " got " & $pairs.len & " pairs"
   for qname, pair in pairs:
     if len(pair) != 2: continue
     var s: Support

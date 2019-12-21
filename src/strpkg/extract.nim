@@ -1,5 +1,6 @@
 import kmer
 import algorithm
+import ./version
 import ./genome_strs
 import msgpack4nim
 import strutils
@@ -67,7 +68,7 @@ proc repeat_length(t:tread): uint8 {.inline.} =
 
 template p_repeat(t:tread): float =
   # proportion repeat
-  float(t.repeat_count * t.repeat_length) / t.align_length.float
+  float(t.repeat_count * t.repeat_length) / max(1'u8, t.align_length).float
 
 template after_mate(aln:Record): bool {.dirty.} =
   (aln.tid > aln.mate_tid or (aln.tid == aln.mate_tid and ((aln.start > aln.mate_pos) or (aln.start == aln.mate_pos and cache.tbl.hasKey(aln.qname)))))
@@ -280,7 +281,7 @@ proc extract_main*() =
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
 
-  if not open(ibam, args.bam, fai=args.fasta, threads=2):
+  if not open(ibam, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -294,7 +295,7 @@ proc extract_main*() =
     stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
   ibam.close()
-  if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
@@ -341,7 +342,16 @@ proc extract_main*() =
   var fs = newFileStream(args.bin, fmWrite)
   if fs == nil:
     quit "[strling] couldnt open binary output file"
-  # TODO: write min_mapq, proportion repeat to start of bin file
+
+  fs.write("STR")
+  fs.write(thisFmtVersion)
+  fs.write(strlingVersion.asArray9)
+  fs.write(proportion_repeat.float32)
+  fs.write(min_mapq.uint8)
+  fs.write(frag_dist)
+  fs.write(($ibam.hdr).len.int32)
+  fs.write($ibam.hdr)
+  fs.write(cache.cache.len.int32)
   for c in cache.cache:
     fs.pack(c)
   stderr.write_line "[strling] finished extraction"

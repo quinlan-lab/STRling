@@ -9,6 +9,8 @@ import hts/bam
 import strutils
 import utils
 
+type tid_rep* = tuple[tid:int32, repeat: array[6, char]]
+
 type Soft* {.size:1, pure.} = enum
   left ## the left clipped portion of the read is repetitive
   right ## the right clipped portion of the read is repetitive
@@ -43,30 +45,10 @@ proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(L)
   s.pack(x.qname)
 
-proc unpack_type*[ByteStream](s: ByteStream, x: var tread) =
-  s.unpack(x.tid)
-  s.unpack(x.position)
-  s.unpack(x.repeat)
-  var f:uint16
-  s.unpack(f)
-  x.flag = Flag(f)
-  var split:uint8
-  s.unpack(split)
-  x.split = Soft(split)
-  s.unpack(x.mapping_quality)
-  s.unpack(x.repeat_count)
-  s.unpack(x.align_length)
-  var L:uint32 = 0
-  var qname: string
-  s.unpack(L)
-  qname = newString(L)
-  if L > 0'u32:
-    s.unpack(qname)
-  x.qname = qname
-
-
 type Cluster* = object
   reads*: seq[tread]
+  left_most*: uint32
+  right_most*: uint32
 
 const mediani = 9
 
@@ -89,13 +71,18 @@ proc tread_cmp(a: tread, b:tread): int =
 type Bounds* = object
   tid*: int32
   left*: uint32
+  left_most*:uint32
   right*: uint32
+  right_most*: uint32
   center_mass*: uint32
   n_left*: uint16
   n_right*: uint16
   n_total*: uint16
   repeat*: string
   name*: string
+  force_report*: bool
+
+const bounds_header* = "#chrom\tleft\tright\trepeat\tname\tleft_most\tright_most\tcenter_mass\tn_left\tn_right\tn_total"
 
 proc `==`(a,b: Bounds): bool =
   if (a.tid == b.tid) and (a.left == b.left) and (a.right == b.right) and (a.repeat == b.repeat):
@@ -108,8 +95,16 @@ proc overlaps*(a,b: Bounds): bool =
     var iright = min(a.right, b.right) #upper bound of intersection interval
     return ileft <= iright #interval non-empty?
 
-# Parse single line of a an STR loci file
-proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
+# Check if a read (Record) overlaps with a Bounds overlap.
+# Same logic/assumptions as overlaps for Bounds above
+proc overlaps*(a: Record, b: Bounds): bool =
+  if a.tid == b.tid:
+    var ileft = max(a.start, int(b.left))
+    var iright = min(a.stop, int(b.right))
+    return ileft <= iright
+
+# Parse single line of an STR loci bed file
+proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   var l_split = l.splitWhitespace()
   if len(l_split) == 4:
     discard
@@ -121,12 +116,50 @@ proc parse_bounds*(l:string, targets: seq[Target]): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
-  doAssert(result.left <= result.right)
+  # Ensure left_most and right_most are within the chromosome
+  # (convert uint to int to allow negative numbers)
+  result.left_most = uint32(max(int32(result.left) - int32(window), 0))
+  result.right_most = min(result.right + window, targets[result.tid].length)
+
+  for x in result.repeat:
+    if x notin "ATCG":
+      quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
 
 # Parse an STR loci bed file
-proc parse_loci*(f:string, targets: seq[Target]): seq[Bounds] =
+proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
   for line in lines f:
-    result.add(parse_bounds(string(line), targets))
+    result.add(parse_bedline(string(line), targets, window))
+
+# Parse single line of a STRling bounds file
+proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
+  var l_split = l.split("\t")
+  if len(l_split) != 11:
+    quit fmt"Error reading loci bed file. Expected 11 fields and got {len(l_split)} on line: {l}"
+  result.tid = int32(get_tid(l_split[0], targets))
+  result.left = uint32(parseInt(l_split[1]))
+  result.right = uint32(parseInt(l_split[2]))
+  result.repeat = l_split[3]
+  result.name = l_split[4]
+  result.left_most = uint32(parseInt(l_split[5]))
+  result.right_most = uint32(parseInt(l_split[6]))
+  result.center_mass = uint32(parseInt(l_split[7]))
+  result.n_left = uint16(parseInt(l_split[8]))
+  result.n_right = uint16(parseInt(l_split[9]))
+  result.n_total = uint16(parseInt(l_split[10]))
+  for x in result.repeat:
+    if x notin "ATCG":
+      quit fmt"Error reading loci bed file. Expected DNA (ATCG only) in the 4th field, and got an unexpected character on line: {l}"
+  doAssert(result.left <= result.right, &"{l}")
+  doAssert(result.left_most <= result.right_most, &"{l}")
+
+# Parse an STRling bounds file
+proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
+  for line in lines f:
+    if line.startswith("#"): continue
+    result.add(parse_boundsline(string(line), targets))
+
 
 # Find the bounds of the STR in the reference genome
 proc bounds*(cl:Cluster): Bounds =
@@ -182,6 +215,25 @@ proc bounds*(cl:Cluster): Bounds =
     else:
       result.left = result.right - 1
 
+  # Set the positions of the left and right most informative reads
+  if int(cl.left_most) > 0:
+    result.left_most = cl.left_most
+  else:
+    result.left_most = posns.min()
+  if int(cl.right_most) > 0:
+    result.right_most = cl.right_most
+  else:
+    result.right_most = posns.max()
+
+  # XXX this correction may be hiding a bug elsewhere
+  if result.left_most > result.left:
+    result.left_most = result.left
+  if result.right_most < result.right:
+    result.right_most = result.right
+
+  doAssert(result.left <= result.right, &"{result}")
+  doAssert(result.left_most <= result.right_most, &"{result}")
+
 proc trim(cl:var Cluster, max_dist:uint32) =
   if cl.reads.len == 0: return
   # drop stuff from start of cluster that is now outside the expected distance
@@ -189,8 +241,14 @@ proc trim(cl:var Cluster, max_dist:uint32) =
   while len(cl.reads) > 1 and cl.reads[0].position < lo:
     cl.reads = cl.reads[1..cl.reads.high]
 
+proc id*(b:Bounds, targets: seq[Target]): string =
+  return &"{targets[b.tid].name}-{b.left}-{b.repeat}"
+
 proc tostring*(b:Bounds, targets: seq[Target]): string =
-  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}\t{b.repeat}\t{b.name}"
+  doAssert(b.left_most <= b.right_most, &"{b}")
+  doAssert(b.left_most <= b.left, &"{b}")
+  doAssert(b.right_most >= b.right, &"{b}")
+  return &"{targets[b.tid].name}\t{b.left}\t{b.right}\t{b.repeat}\t{b.name}\t{b.left_most}\t{b.right_most}\t{b.center_mass}\t{b.n_left}\t{b.n_right}\t{b.n_total}"
 
 proc tostring*(c:Cluster, targets: seq[Target]): string =
   var rep: string
@@ -237,6 +295,9 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
         else:
           c2.reads.add(r)
 
+      c1.right_most = mid - 1
+      c2.left_most = mid
+
       yield c1
       yield c2
 
@@ -247,6 +308,7 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
 iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int): Cluster =
   var i = 0
   var c:Cluster
+  var last_right = 0'u32
   while i < reps.len:
     # start a new cluster
     var it = reps[i]
@@ -263,29 +325,36 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
 
       # remove stuff (at start of cluster) that's now too far away.
       c.trim(max_dist + 100)
+      c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
+      c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
+
       if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-        for sc in c.split_cluster(min_supporting_reads): yield sc
+        for sc in c.split_cluster(min_supporting_reads):
+          yield sc
+          last_right = sc.right_most
         c = Cluster()
       # increment i to past last j and break out of this cluster
       break
 
   c.trim(max_dist + 100)
+  c.right_most = max(c.reads[c.reads.high].position, c.posmed(mediani) + max_dist)
+  c.left_most = min(c.reads[0].position, c.posmed(mediani) - max_dist)
+
+  doAssert(c.left_most <= c.right_most)
+
   if c.reads.len >= min_supporting_reads and c.reads.has_anchor:
-    for sc in c.split_cluster(min_supporting_reads): yield sc
+    for sc in c.split_cluster(min_supporting_reads):
+      yield sc
 
-
-iterator cluster*(tandems: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
-  tandems.sort(tread_cmp)
-
-  for group in groupby(tandems, bytidrep):
-    # reps are on same chromosome and have same repeat unit
-    var reps: seq[tread] = group.v
+iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
+  # reps passed here are guaranteed to be split by tid and repeat unit.
+  if reps.len > 0:
+    doAssert reps[0].tid == reps[reps.high].tid and reps[0].repeat == reps[reps.high].repeat
 
     if reps[0].tid < 0:
       #stderr.write_line "yielding " & $reps.len & " unplaced reads with repeat: " & $reps[0].repeat
       yield Cluster(reads: reps)
-      continue
-
-    for c in trcluster(reps, max_dist, min_supporting_reads):
-      yield c
+    else:
+      for c in trcluster(reps, max_dist, min_supporting_reads):
+        yield c
 

@@ -52,7 +52,7 @@ def main():
         random.seed(args.seed)
 
     # Write bed files
-    for i, random_allele in enumerate(random.sample(range(args.min, args.max), args.num)):
+    for i, random_allele in enumerate(random.sample(range(args.min, args.max + 1), args.num)):
         outfile = "{}{}.{}-{}_{}_{}_{}.bed".format(prefix, i, chrom, start, RU, allele1, random_allele)
         with open(outfile, "w") as bed_out:
             bed_out.write(locus_string + str(random_allele) + '\n')

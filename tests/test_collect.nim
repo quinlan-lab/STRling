@@ -5,7 +5,7 @@ import hts/bam
 
 suite "collect suite":
 
-  test "test spanning read":
+  test "test overlapping and spanning reads":
     
     var h = Header()
     h.from_string("""@HD	VN:1.6	SO:coordinate
@@ -16,25 +16,33 @@ suite "collect suite":
     var txt = "read1	0	chr1	1	40	25M5S	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	*"
     a.from_string(txt)
 
-    var support:Support
     var bounds:Bounds
 
-    bounds = Bounds(tid: 0, left: 5, right: 100, repeat: "A")
-    check spanning_read(a, bounds, support) == false
+    var s1:Support
+    bounds = Bounds(tid: 0, left: 50, right: 100, repeat: "A")
+    check overlapping_read(a, bounds, s1) == false
 
     # Require the read to span (repeat length - 1) bp either side of the bounds
+    var s2:Support
     bounds = Bounds(tid: 0, left: 5, right: 15, repeat: "AAAAAA")
-    check spanning_read(a, bounds, support) == false
+    check overlapping_read(a, bounds, s2) == true
+    check s2.Type == SupportType.OverlappingRead
 
+    var s3:Support
     bounds = Bounds(tid: 0, left: 6, right: 15, repeat: "AAAAAA")
-    check spanning_read(a, bounds, support) == true
+    check overlapping_read(a, bounds, s3) == true
+    check s3.Type == SupportType.SpanningRead
 
     # Require extra slop for small bounds
+    var s4:Support
     bounds = Bounds(tid: 0, left: 9, right: 10, repeat: "AAAAAA")
-    check spanning_read(a, bounds, support) == false
+    check overlapping_read(a, bounds, s4) == true
+    check s2.Type == SupportType.OverlappingRead
 
+    var s5:Support
     bounds = Bounds(tid: 0, left: 10, right: 11, repeat: "AAAAAA")
-    check spanning_read(a, bounds, support) == true
+    check overlapping_read(a, bounds, s5) == true
+    check s5.Type == SupportType.SpanningRead
 
   test "test spanning pair":
     

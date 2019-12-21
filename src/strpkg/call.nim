@@ -8,26 +8,31 @@ import random
 import tables
 import hts/bam
 import hts/fai
+import strformat
+import math
+import argparse
+
 import ./cluster
 import ./collect
 import ./utils
 import ./genotyper
 import ./genome_strs
+import ./extract
+import ./callclusters
+import ./unpack
+
 export tread
 export Soft
-import strformat
-import math
-import argparse
-import ./extract
 
 proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
     option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
-    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="1")
+    option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--loci", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
+    option("-b", "--bounds", help="STRling -bounds.txt file (usually produced by strling merge) specifying additional STR loci to genotype.")
     option("-o", "--output-prefix", help="prefix for output files", default="strling")
     flag("-v", "--verbose")
     arg("bam", help="path to bam file")
@@ -55,7 +60,11 @@ proc call_main*() =
     if not fileExists(args.loci):
       quit "couldn't open loci file"
 
-  if not open(ibam_dist, args.bam, fai=args.fasta, threads=2):
+  if args.bounds != "":
+    if not fileExists(args.bounds):
+      quit "couldn't open bounds file"
+
+  if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -71,153 +80,187 @@ proc call_main*() =
   ibam_dist.close()
   ibam_dist = nil
   var ibam:Bam
-  if not open(ibam, args.bam, fai=args.fasta, threads=2, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
 
-  var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median,
-                      min_support: min_support, min_mapq: min_mapq)
-  var nreads = 0
+                      min_clip: min_clip, min_clip_total: min_clip_total,
+                      min_support: min_support, min_mapq: min_mapq,
+                      window: frag_dist.median(0.98),
+                      targets: ibam.hdr.targets)
+
+  # Unpack STR reads from bin file and put them in a table by repeat unit and chromosome
+  var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
 
   var fs = newFileStream(args.bin, fmRead)
-  while not fs.atEnd:
-    var t:tread
-    fs.unpack(t)
-    cache.cache.add(t)
-  stderr.write_line &"[strling] read {cache.cache.len} treads from bin file"
+  var extracted = fs.unpack_file()
+  doAssert extracted.targets.same(ibam.hdr.targets)
+  fs.close()
+  for r in extracted.reads:
+    treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
+  # TODO: Check all bin file came from the current version of STRling
+  for k, trs in treads_by_tid_rep.mpairs:
+    trs.sort(proc(a, b:tread): int =
+      cmp(a.position, b.position)
+    )
 
   ### discovery
   var
     gt_fh:File
-    reads_fh:File
     bounds_fh:File
-    span_fh:File
     unplaced_fh:File
   if not open(gt_fh, args.output_prefix & "-genotype.txt", mode=fmWrite):
     quit "couldn't open output file"
-  if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
-    quit "couldn't open output file"
   if not open(bounds_fh, args.output_prefix & "-bounds.txt", mode=fmWrite):
-    quit "couldn't open output file"
-  if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
     quit "couldn't open output file"
   if not open(unplaced_fh, args.output_prefix & "-unplaced.txt", mode=fmWrite):
     quit "couldn't open output file"
 
-  var window = frag_dist.median(0.98)
+  # Write headers
+  bounds_fh.write_line(bounds_header & "\tdepth")
+  gt_fh.write_line(gt_header)
 
-  reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id" # print header
-  gt_fh.write_line("#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\ttotal_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts")
-
-
-
-  var targets = ibam.hdr.targets
+  when defined(debug):
+    var
+      reads_fh:File
+      span_fh:File
+    if not open(reads_fh, args.output_prefix & "-reads.txt", mode=fmWrite):
+      quit "couldn't open output file"
+    if not open(span_fh, args.output_prefix & "-spanning.txt", mode=fmWrite):
+      quit "couldn't open output file"
+    reads_fh.write_line &"#chrom\tpos\tstr\tsoft_clip\tstr_count\tqname\tcluster_id"
 
   var loci: seq[Bounds]
   if args.loci != "":
-    # Parse bed file of regions and report spanning reads
-    loci = parse_loci(args.loci, targets)
+    # Parse bed file of regions. These will also be genotyped
+    loci = parse_bed(args.loci, opts.targets, opts.window.uint32)
+    stderr.write_line &"Read {len(loci)} loci from {args.loci}"
 
-  var unplaced_counts = initCountTable[string]()
-  var genotypes_by_repeat = initTable[string, seq[Call]]()
+  var bounds: seq[Bounds]
+  if args.bounds != "":
+    # Parse -bounds.txt file of regions. These will also be genotyped
+    bounds = parse_bounds(args.bounds, opts.targets)
+    stderr.write_line &"Read {len(bounds)} bounds from {args.bounds}"
 
-  var ci = 0
-  for c in cache.cache.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
-    if c.reads[0].tid == -1:
-      unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
-      continue
-    if c.reads.len >= uint16.high.int:
-      stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
-      continue
-    var b = c.bounds
-
-    # Check if bounds overlaps with one of the input loci, if so overwrite b attributes
+  # Merge loci and bounds, with loci overwriting bounds
+  for bound in bounds.mitems:
     for i, locus in loci:
-      if b.overlaps(locus):
-        b.name = locus.name
-        b.left = locus.left
-        b.right = locus.right
+      if locus.overlaps(bound):
+        bound.name = locus.name
+        bound.left = locus.left
+        bound.right = locus.right
         # Remove locus from loci (therefore will use first matching bound and locus)
         loci.del(i)
         break
 
-    if b.right - b.left > 1000'u32:
-      stderr.write_line "large bounds:" & $b & " skipping"
+  # Add any remaining loci to bounds
+  for locus in loci:
+    bounds.add(locus)
+
+  var unplaced_counts = initCountTable[string]()
+  var genotypes_by_repeat = initTable[string, seq[Call]]()
+
+  # Assign STR reads to provided bounds and genotype them
+  for bound in bounds.mitems:
+    var str_reads = assign_reads_locus(bound, treads_by_tid_rep)
+    if bound.right - bound.left > 1000'u32:
+      stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    # require left and right support
-    if b.n_left < min_clip: continue
-    if b.n_right < min_clip: continue
-    if (b.n_right + b.n_left) < min_clip_total: continue
+    var (spans, median_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    if spans.len > 5_000:
+      when defined(debug):
+        stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
+      continue
+    if median_depth == -1:
+      continue
 
-    #[
-    #debugging for reference size
-    var ref_size = b.check_reference_size(fai, targets[b.tid].name)
-    echo ref_size, b
+    var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
 
-    var gr: seq[region]
-
-    try:
-      if genome_str[targets[b.tid].name].find(b.left.int - 10, b.right.int + 10, gr):
-      else:
-    except KeyError:
-      discard
-    ]#
-
-    var (spans, median_depth) = ibam.spanners(b, window, frag_dist, opts.min_mapq)
-    var gt = genotype(b, c.reads, spans, targets, float(median_depth))
-
-    var canon_repeat = b.repeat.canonical_repeat
+    var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
       genotypes_by_repeat[canon_repeat] = @[]
     genotypes_by_repeat[canon_repeat].add(gt)
 
-    var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line b.tostring(targets) & "\t" & $median_depth
-    for s in spans:
-      span_fh.write_line s.tostring(b, targets[b.tid].name)
-    for s in c.reads:
-      reads_fh.write_line s.tostring(targets) & "\t" & $ci
-    ci += 1
+    #var estimate = spans.estimate_size(frag_dist)
+    bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
+    when defined(debug):
+      for s in spans:
+        span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
+      var locusid = bound.id(opts.targets)
+      for r in str_reads:
+        reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
 
-  # Report spanning reads/pairs for any remaining loci that were not matched with a bound
-  for locus in loci:
-    if locus.right - locus.left > 1000'u32:
-      stderr.write_line "large bounds:" & $locus & " skipping"
-      continue
-    var (spans, median_depth) = ibam.spanners(locus, window, frag_dist, opts.min_mapq)
-    var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line locus.tostring(targets) & "\t" & $median_depth
-    for s in spans:
-      span_fh.write_line s.tostring(locus, targets[locus.tid].name)
- 
-  ### end discovery
+  # Cluster remaining reads and genotype
+  var ci = 0
 
-  # Loop through again and refine genotypes
+  for key, treads in treads_by_tid_rep.mpairs:
+    ## treads are for the single tid, repeat unit defined by key
+    for c in treads.cluster(max_dist=opts.window.uint32, min_supporting_reads=opts.min_support):
+      if c.reads[0].tid == -1:
+        unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
+        continue
+
+      var b: Bounds
+      var good_cluster: bool
+      (b, good_cluster) = bounds(c, min_clip, min_clip_total)
+      if good_cluster == false:
+        continue
+
+      var (spans, median_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      if spans.len > 5_000:
+        when defined(debug):
+          stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
+        continue
+      if median_depth == -1:
+        continue
+
+      var gt = genotype(b, c.reads, spans, opts, float(median_depth))
+
+      var canon_repeat = b.repeat.canonical_repeat
+      if not genotypes_by_repeat.hasKey(canon_repeat):
+        genotypes_by_repeat[canon_repeat] = @[]
+      genotypes_by_repeat[canon_repeat].add(gt)
+
+      #var estimate = spans.estimate_size(frag_dist)
+      bounds_fh.write_line b.tostring(opts.targets) & "\t" & $median_depth
+
+      when defined(debug):
+        for s in spans:
+          span_fh.write_line s.tostring(b, opts.targets[b.tid].name)
+        for s in c.reads:
+          reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
+      ci += 1
+
+  # Loop through again and refine genotypes for loci that are the only
+  # large expansion with that repeat unit
   for repeat, genotypes in genotypes_by_repeat:
-    if len(genotypes) == 1:
-      var gt = genotypes[0]
-      gt.update_genotype(unplaced_counts[repeat])
+    var gt_expanded: seq[Call]
+    for gt in genotypes:
+      if gt.is_large:
+        gt_expanded.add(gt)
+        if gt_expanded.len > 1:
+          break
+    if gt_expanded.len == 1:
+      gt_expanded[0].update_genotype(unplaced_counts[repeat])
+    for gt in genotypes:
       gt_fh.write_line gt.tostring()
-    else:
-      for gt in genotypes:
-        gt_fh.write_line gt.tostring()
 
   for repeat, count in unplaced_counts:
       unplaced_fh.write_line &"{repeat}\t{count}"
 
   gt_fh.close
-  reads_fh.close
   bounds_fh.close
-  span_fh.close
   unplaced_fh.close
-  if args.verbose:
-    stderr.write_line cache.tbl.len, " left in table"
-    stderr.write_line &"Supporting evidence used to make the genotype calls:"
-    stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
+  when defined(debug):
+    span_fh.close
+    reads_fh.close
     stderr.write_line &"wrote str-like reads to {args.output_prefix}-reads.txt"
     stderr.write_line &"wrote spanning reads and spanning pairs to {args.output_prefix}-spanning.txt"
+  if args.verbose:
+    stderr.write_line &"Supporting evidence used to make the genotype calls:"
+    stderr.write_line &"wrote putative str bounds to {args.output_prefix}-bounds.txt"
     stderr.write_line &"wrote counts of unplaced reads with STR content to {args.output_prefix}-unplaced.txt"
     stderr.write_line &"Main results file:"
     stderr.write_line &"wrote genotypes to {args.output_prefix}-genotype.txt"
@@ -226,7 +269,5 @@ when isMainModule:
   when not defined(danger):
    stderr.write_line "warning !!! not compiled in fast mode. Compile with -d:danger to increase speed"
 
-  call_main()
-
-
   # Parse args/options
+  call_main()

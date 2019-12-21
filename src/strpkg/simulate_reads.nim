@@ -102,6 +102,8 @@ proc read_hist(path: string): array[4096, uint32] =
   #fragment_dist = args.bam_or_hist.read_hist
   var i = 0
   for l in path.lines:
+    if i > result.high:
+      return
     result[i] = l.strip.parseInt.uint32
     i.inc
 
