@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.org/quinlan-lab/STRling)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 STRling is still in development. Please report bugs via GitHub issues.
 
@@ -32,6 +33,8 @@ Compile in fast mode (danger):
 
 ## Run
 
+### Single sample
+
 #### extract informative pairs to a binary format
 ```
 name=hg002
@@ -45,6 +48,28 @@ mkdir -p str-results/
 strling call --output-prefix str-results/$name -f $reference_fasta /path/to/$name.cram $name.bin
 ```
 
+### Joint calling
+
+#### extract informative pairs to a binary format for a single sample (same as above)
+```
+strling extract -f $reference_fasta /path/to/$sample2.cram $sample1.bin
+strling extract -f $reference_fasta /path/to/$sample2.cram $sample2.bin
+```
+
+#### joint call call str loci accross all samples
+
+```
+mkdir -p str-results/
+strling merge --output-prefix str-results/joint -f $reference_fasta $sample1.bin $sample2.nim
+```
+
+#### call strs on a single sample
+
+```
+strling call --output-prefix str-results/$sample1 -b str-results/joint-bounds.txt -f $reference_fasta /path/to/$sample1.cram $sample1.bin
+strling call --output-prefix str-results/$sample2 -b str-results/joint-bounds.txt -f $reference_fasta /path/to/$sample2.cram $sample2.bin
+```
+
 ## Outputs
 
 The main output file is `{$prefix}-genotype.txt`. It reports all STR expansion loci that pass thresholds as well as any provided as input. The columns are:
@@ -52,8 +77,8 @@ The main output file is `{$prefix}-genotype.txt`. It reports all STR expansion l
 - left: predicted left boundry of STR locus
 - right: predicted right boundry of STR locus
 - repeatunit: predicted STR repeat unit
-- allele1\_est: estimated size of the shorter allele in repeat units, from spanning reads (if any)
-- allele2\_est: estimated size of the larger allele in repeat units, from anchored reads
+- allele1\_est: estimated size of the shorter allele in repeat units relative to the reference, from spanning reads (if any). "na" indicats no reads support an allele shorter than the read length, so both may be large.
+- allele2\_est: estimated size of the larger allele in repeat units relative to the reference, from anchored reads
 - total\_reads: number of reads supporting an expansion at this locus
 - spanning\_reads: number of reads that span the locus
 - spanning\_pairs: number of read pairs that span the locus

@@ -36,27 +36,27 @@ def parse_bed(f):
         return(alleles)
 
 def parse_gt(all_files):
-    header = 'chrom,left,right,repeatunit,allele1_est,allele2_est,anchored_pairs,spanning_reads,spanning_pairs,left_clips,right_clips,unplaced_pairs,depth,sum_str_counts'
     all_df_list = []
     for f in all_files:
-        df = pd.read_csv(f, sep='\t', names=header.split(','))
+        df = pd.read_csv(f, sep='\t')
+        df.rename(columns={"#chrom": "chrom"}, inplace=True)
         df['sim'] = get_sim_str(f)
         all_df_list.append(df)
     all_df = pd.concat(all_df_list)
     return(all_df)
 
 def parse_bounds(all_files):
-    header = 'chrom,left,right,mean-pos,left-splits,right-splits,total-str-reads,repeatunit,name,depth'
     all_df_bounds = []
     for f in all_files:
-        df = pd.read_csv(f, sep='\t', names=header.split(','))
+        df = pd.read_csv(f, sep='\t')
+        df.rename(columns={"#chrom": "chrom"}, inplace=True)
         df['sim'] = get_sim_str(f)
         all_df_bounds.append(df)
     all_df = pd.concat(all_df_bounds)
     return(all_df)
 
 def parse_spans(all_files):
-    header = 'chrom,left,right,FragmentLength,FragmentPercentile,RepeatCount,DeletionLen,InsertionLen,qname'
+    header = 'chrom,left,right,Type,FragmentLength,FragmentPercentile,RepeatCount,InsertionLen,DeletionLen,repeat,qname'
     all_df_list = []
     for f in all_files:
         df = pd.read_csv(f, sep='\t', names=header.split(','))
@@ -114,6 +114,7 @@ def main():
     all_df_reads = []
     for f in readsfiles:
         df_reads = pd.read_csv(f, sep='\t')
+        df_reads.rename(columns={"#chrom": "chrom"}, inplace=True)
         df_reads['sim'] = get_sim_str(f)
         all_df_reads.append(df_reads)
     all_df = pd.concat(all_df_reads)

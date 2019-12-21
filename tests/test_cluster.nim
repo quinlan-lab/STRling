@@ -43,7 +43,6 @@ suite "cluster suite":
     tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 1, split: Soft.none),
     tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 200, split: Soft.none),
     tread(tid: 1.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 255, split: Soft.none),
-    tread(tid: 2.int32, repeat: ['A', 'A', 'A', 'A', 'A', 'T'], position: 1, split: Soft.none),
     ]
 
     var j = 0
@@ -76,6 +75,8 @@ suite "cluster suite":
     var b = cl.bounds
     check b.left == 223
     check b.right == 253
+    check b.left_most == 123
+    check b.right_most == 283
 
   test "test bounds: no soft-clipped reads so use median":
     var reads = @[
@@ -127,21 +128,41 @@ suite "cluster suite":
 #    check b.left == 3
 #    check b.right == 3
 
-  test "test parse STR region":
-    var l = "chr1 1 100 CAG"
+  test "test parse line from STR bed file":
+    var l = "chr1 100 200 CAG"
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
-    var b = parse_bounds(l, targets)
+    var window = 50
+    var b = parse_bedline(l, targets, window.uint32)
     check b.tid == 0
-    check b.left == 1
-    check b.right == 100
+    check b.left == 100
+    check b.left_most == 50
+    check b.right == 200
+    check b.right_most == 250
     check b.repeat == "CAG"
 
   test "test parse STR bed file":
     var f = "test_str_parse.bed"
     var text = "chr1 1 100 CAG\nchr1 1 100 CAG"
+    var window = 100
     var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
     writeFile(f, text)
-    check parse_loci(f, targets)[1].tid == 0
+    check parse_bed(f, targets, window.uint32)[1].tid == 0
+
+  test "test parse line from STRling -bounds.txt":
+    var l = "chr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    var b = parse_boundsline(l, targets)
+    check b.tid == 0
+    check b.left == 990
+    check b.right == 1010
+    check b.repeat == "CAG"
+
+  test "test parse STRling -bounds.txt file":
+    var f = "test_str_parse-bounds.txt"
+    var text = "chr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50\nchr1\t990\t1010\tCAG\t\t500\t1500\t1000\t3\t1\t50"
+    var targets = @[Target(name: "chr1", tid: 0, length: 10000)]
+    writeFile(f, text)
+    check parse_bounds(f, targets)[1].tid == 0
 
 
   test "inverted bounds":
@@ -207,5 +228,21 @@ suite "cluster suite":
        tread(tid: 10, position: 92611833, split: Soft.right),
        tread(tid: 10, position: 92611921, split: Soft.none),
        tread(tid: 10, position: 92611939, split: Soft.none)]
+    var b = Cluster(reads: tr).bounds
+    check b.left < b.right
+
+  test "right_most bug":
+    var tr = @[
+      tread(tid: 5, position: 34847227, split: Soft.left),
+      tread(tid: 5, position: 34847227, split: Soft.none),
+      tread(tid: 5, position: 34847883, split: Soft.left),
+      tread(tid: 5, position: 34847911, split: Soft.none),
+      tread(tid: 5, position: 34847921, split: Soft.left),
+      tread(tid: 5, position: 34847921, split: Soft.left),
+      tread(tid: 5, position: 34847930, split: Soft.none),
+      tread(tid: 5, position: 34848950, split: Soft.left),
+      tread(tid: 5, position: 34848950, split: Soft.left),
+      tread(tid: 5, position: 34848950, split: Soft.left)]
+
     var b = Cluster(reads: tr).bounds
     check b.left < b.right

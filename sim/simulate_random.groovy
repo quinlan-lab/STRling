@@ -15,7 +15,7 @@ mutate_locus = {
             $PYTHON $TOOLS/random_str_alleles.py
                 --locus "4   3076604 3076695 CAG"
                 --out $dir/
-                --num 200
+                --num 100
                 --min -5
                 --max 200
                 --fixed 0
@@ -24,6 +24,8 @@ mutate_locus = {
     }
 }
 
+// hist based on:
+// /uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/data/STR_true_pos/D09-903.cram
 @transform("bam")
 simulate_str_reads = {
     doc """ """
@@ -31,10 +33,10 @@ simulate_str_reads = {
     output.dir = "sim"
 
     exec """
-        /uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/git/str-dev/src/strpkg/simulate_reads
+        ~/storage/git/STRling/src/strpkg/simulate_reads
             --fasta $REF
             --output $output.prefix
-            /uufs/chpc.utah.edu/common/HIPAA/u6026198/storage/data/STR_true_pos/D09-903.cram
+            $input.hist
             $input.bed
     """
 }
@@ -53,6 +55,8 @@ run {
         mutate_locus +
         "%.bed" * [
             simulate_str_reads +
-            str_extract + str_call
-        ] + combine
+            str_extract
+        ] + str_merge + 
+        "%.bin" * [ str_call ] +
+        combine
 }
