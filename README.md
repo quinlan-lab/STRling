@@ -1,5 +1,8 @@
 [![Build Status](https://travis-ci.org/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.org/quinlan-lab/STRling)
+[![Documentation Status](https://readthedocs.org/projects/strling/badge/?version=latest)](https://strling.readthedocs.io/en/latest/?badge=latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+__[STRling Documentation](https://strling.readthedocs.io/en/latest/)__
 
 STRling is still in development. Please report bugs via GitHub issues.
 
