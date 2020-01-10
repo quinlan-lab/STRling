@@ -110,21 +110,6 @@ def parse_controls(control_file):
         ". Check the file: ", control_file]))
     return(control_estimates)
 
-def hubers_est(x):
-    """Emit Huber's M-estimator median and SD estimates.
-    If Huber's fails, emit standard median and NA for sd"""
-    huber50 = sm.robust.scale.Huber(maxiter=50)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", RuntimeWarning)
-
-        try:
-            mu, s = huber50(np.array(x))
-        except (ValueError, RuntimeWarning):
-            mu = np.median(x)
-            s = np.nan
-    return pd.Series({'mu': mu, 'sd': np.sqrt(s)})
-
 def z_score(x, df):
     """Calculate a z score for each x value, using estimates from a pandas data
     frame with the columns 'mu' and 'sd' and index coressponding to the x values"""
@@ -133,7 +118,11 @@ def z_score(x, df):
 
 def p_adj_bh(x):
     '''Adjust p values using Benjamini/Hochberg method'''
-    return multipletests(x, method='fdr_bh', returnsorted = False)[1]
+    # Mask out nan values as they cause the multiptests algorithm to return all nan
+    mask = np.isfinite(x)
+    pval_corrected = x
+    pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted = False)[1]
+    return pval_corrected
 
 def main():
 
@@ -215,12 +204,19 @@ def main():
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Fill zeros\n')
-    # Fill zeros in genotype 
+    # Fill NA in genotype
+    # Not appropriate to fill with 0 because NA are likely regions of very high coverage 
     sum_str_wide = genotype_data.pivot(index='locus', columns='sample',
-                    values='sum_str_counts').fillna(0)
-    sum_str_wide['locus'] = sum_str_wide.index
+                    values='sum_str_counts')
 
     sample_cols = list(set(genotype_data['sample']))
+
+    # Remove rows that are all 0 or all NA
+    #sum_str_wide[(sum_str_wide.sum(axis = ) == 0) | (x[:,1] == 0.)]
+    mask = np.all(np.isnan(sum_str_wide) | np.equal(sum_str_wide, 0), axis=1)
+    sum_str_wide = sum_str_wide[~mask]
+    sum_str_wide['locus'] = sum_str_wide.index
+
     sum_str_long = pd.melt(sum_str_wide, id_vars = 'locus',
                             value_vars = sample_cols, value_name = 'sum_str_counts',
                             var_name = 'sample')
@@ -256,21 +252,27 @@ def main():
     # Calculate values for if there were zero reads at a locus in all samples
     null_locus_counts = np.log2(factor * (0 + 1) / sample_depths)
     # Add a null locus that has 0 reads for all individuals (so just uses coverage)
-    null_locus_counts_est = hubers_est(null_locus_counts)
+    null_locus_counts_est = pd.Series([
+        np.median(null_locus_counts['depth']), np.std(null_locus_counts['depth'])
+        ], index = ['mu', 'sd'])
+    #XXX do something if sd == 0?
 
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
 
     # Use Huber's M-estimator to calculate median and SD across all samples
     # for each locus
-    sum_str_wide.drop(['locus'], axis = 1, inplace = True)
-
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Calculate Hubers estimates\n')
-    locus_estimates = sum_str_wide.apply(hubers_est, axis=1)
+    sys.stderr.write('Calculate mu and sd estimates\n')
+    sum_str_wide.drop(['locus'], axis = 1, inplace = True)
+    locus_estimates = pd.DataFrame(list(zip(
+        np.median(sum_str_wide, axis = 1), np.std(sum_str_wide, axis = 1)
+        )), columns = ['mu', 'sd'])
+    locus_estimates.index = sum_str_wide.index
+
     # Where sd is NA, replace with the minimum non-zero sd from all loci
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Clean up zeros in Hubers estimates\n')
+    sys.stderr.write('Clean up zeros in sd estimates\n')
     min_sd = np.min(locus_estimates['sd'][locus_estimates['sd'] > 0])
     locus_estimates['sd'].fillna(min_sd, inplace=True)
     # if sd is 0, replace with min_sd #XXX is this sensible?
@@ -342,7 +344,6 @@ def main():
         # Calculate p values based on z scores (one sided)
         pvals = z.apply(lambda z_row: [norm.sf(x) for x in z_row], axis=1, 
                     result_type='broadcast') # apply to each row
-
         if pvals.isnull().values.all(): # Don't bother adjusting p values if all are null
             adj_pvals = pvals
         else:
@@ -351,18 +352,24 @@ def main():
         
         # Merge pvals and z scores back into genotypes
         adj_pvals['locus'] = adj_pvals.index
-        pvals_long = pd.melt(adj_pvals, id_vars = 'locus',
+        adj_pvals_long = pd.melt(adj_pvals, id_vars = 'locus',
                                 value_vars = sample_cols, value_name = 'p_adj',
                                 var_name = 'sample')
+        genotype_data = pd.merge(genotype_data, adj_pvals_long)
+
+        pvals['locus'] = pvals.index
+        pvals_long = pd.melt(pvals, id_vars = 'locus',
+                                value_vars = sample_cols, value_name = 'p',
+                                var_name = 'sample')
         genotype_data = pd.merge(genotype_data, pvals_long)
-        
+
         z['locus'] = z.index #important to do this only after p values calculated
         z_long = pd.melt(z, id_vars = 'locus',
                         value_vars = sample_cols, value_name = 'outlier', var_name = 'sample')
         genotype_data = pd.merge(genotype_data, z_long)
 
     elif z.shape[0] == 0:
-        pass #XXX raise error. No input data!
+        raise ValueError('z score table is empty')
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Write output files\n')
@@ -373,11 +380,11 @@ def main():
                                     'spanning_reads', 'spanning_pairs',
                                     'left_clips', 'right_clips', 'unplaced_pairs',
                                     'sum_str_counts', 'sum_str_log', 'depth',
-                                    'outlier', 'p_adj',
+                                    'outlier', 'p', 'p_adj',
                                     ]]
 
     #sort by outlier score then estimated size (bpInsertion), both descending
-    write_data = write_data.sort_values(['outlier', 'allele2_est'], ascending=[False, False])
+    write_data = write_data.sort_values(['p_adj', 'allele2_est'], ascending=[True, False])
     # Convert outlier and p_adj to numeric type and do some rounding/formatting
     write_data['outlier'] = pd.to_numeric(write_data['outlier'])
     write_data['p_adj'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['p_adj']) ]
