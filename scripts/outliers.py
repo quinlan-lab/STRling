@@ -344,8 +344,14 @@ def main():
         sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
         sys.stderr.write('Calculate p values\n')
         # Calculate p values based on z scores (one sided)
-        pvals = z.apply(lambda z_row: [norm.sf(x) for x in z_row], axis=1, 
-                    result_type='broadcast') # apply to each row
+        # Catch warning caused by NaN values. These are simply returned as NaN anyway.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+
+            pvals = pd.DataFrame(norm.sf(z), index = z.index, columns = z.columns)
+
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Adjust p values\n')
         if pvals.isnull().values.all(): # Don't bother adjusting p values if all are null
             adj_pvals = pvals
         else:
