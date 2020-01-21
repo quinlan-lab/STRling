@@ -81,7 +81,7 @@ def parse_genotypes(filename, min_clips = 5):
     sample_id = get_sample(filename)
     try:
         genotype_data = pd.read_csv(filename, delim_whitespace = True, header = 0)
-        genotype_data.rename(columns={'#chrom': 'Chromosome', 'left': 'Start', 'right': 'End'}, inplace = True)
+        genotype_data.rename(columns={'#chrom': 'chrom'}, inplace = True)
     except pd.io.common.EmptyDataError:
         sys.exit('ERROR: file {0} was empty.\n'.format(filename))
     if genotype_data.shape[0] == 0: # Check for file with only header
@@ -186,8 +186,9 @@ def main():
     sys.stderr.write('Processing {} samples...\n'.format(len(all_samples)))
 
     #XXX fix column names in parse_genptypes()
-    genotype_data['locus'] = genotype_data['Chromosome'] + '-' + genotype_data['Start'].astype(str) + '-' + genotype_data['End'].astype(str) + '-' + genotype_data['repeatunit']
-    genotype_data = genotype_data.rename(columns={'Chromosome': 'chrom', 'Start': 'left', 'End': 'right'})
+    genotype_data['locus'] = genotype_data['chrom'] + '-' + genotype_data['left'].astype(str) + '-' + genotype_data['right'].astype(str) + '-' + genotype_data['repeatunit']
+    sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+    sys.stderr.write('Reset index\n')
     genotype_data = genotype_data.reset_index(drop=True)
 
 #XXX some testing here - remove
