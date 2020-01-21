@@ -113,8 +113,7 @@ def parse_controls(control_file):
 def z_score(x, df):
     """Calculate a z score for each x value, using estimates from a pandas data
     frame with the columns 'mu' and 'sd' and index coressponding to the x values"""
-    z = (x.transpose() - df['mu'])/df['sd']
-    return z.transpose()
+    return (x - df['mu'][:,np.newaxis])/df['sd'][:,np.newaxis]
 
 def p_adj_bh(x):
     '''Adjust p values using Benjamini/Hochberg method'''
