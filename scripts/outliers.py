@@ -182,7 +182,7 @@ def main():
     genotype_data = pd.concat( (parse_genotypes(f) for f in genotype_files), ignore_index = True)
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Processing {} samples...\n'.format(len(all_samples)))
+    sys.stderr.write('Read {} samples. Making locus column\n'.format(len(all_samples)))
 
     #XXX fix column names in parse_genptypes()
     genotype_data['locus'] = genotype_data['chrom'] + '-' + genotype_data['left'].astype(str) + '-' + genotype_data['right'].astype(str) + '-' + genotype_data['repeatunit']
@@ -329,7 +329,7 @@ def main():
         z = z.append(null_z)
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Calculating and adjusting p values\n')
+    sys.stderr.write('Calculating and adjusting p values:\n')
     if z.shape[0] == 1:
         ids = z.columns # save index order as data gets sorted
         # Calculate p values based on z scores (one sided)
@@ -341,6 +341,8 @@ def main():
         genotype_data = pd.merge(genotype_data, p_z_df)
 
     elif z.shape[0] > 1:
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Calculate p values\n')
         # Calculate p values based on z scores (one sided)
         pvals = z.apply(lambda z_row: [norm.sf(x) for x in z_row], axis=1, 
                     result_type='broadcast') # apply to each row
@@ -351,18 +353,24 @@ def main():
             adj_pvals = pvals.apply(p_adj_bh, axis=0) # apply to each column
         
         # Merge pvals and z scores back into genotypes
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Merge adjusted p values\n')
         adj_pvals['locus'] = adj_pvals.index
         adj_pvals_long = pd.melt(adj_pvals, id_vars = 'locus',
                                 value_vars = sample_cols, value_name = 'p_adj',
                                 var_name = 'sample')
         genotype_data = pd.merge(genotype_data, adj_pvals_long)
 
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Merge p values\n')
         pvals['locus'] = pvals.index
         pvals_long = pd.melt(pvals, id_vars = 'locus',
                                 value_vars = sample_cols, value_name = 'p',
                                 var_name = 'sample')
         genotype_data = pd.merge(genotype_data, pvals_long)
 
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Merge outlier z scores\n')
         z['locus'] = z.index #important to do this only after p values calculated
         z_long = pd.melt(z, id_vars = 'locus',
                         value_vars = sample_cols, value_name = 'outlier', var_name = 'sample')
