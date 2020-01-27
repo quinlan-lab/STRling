@@ -184,7 +184,6 @@ def main():
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Read {} samples. Making locus column\n'.format(len(all_samples)))
 
-    #XXX fix column names in parse_genptypes()
     genotype_data['locus'] = genotype_data['chrom'] + '-' + genotype_data['left'].astype(str) + '-' + genotype_data['right'].astype(str) + '-' + genotype_data['repeatunit']
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Reset index\n')
@@ -260,15 +259,16 @@ def main():
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
 
-    # Use Huber's M-estimator to calculate median and SD across all samples
-    # for each locus
+    sum_str_log_wide = genotype_data.pivot(index='locus', columns='sample',
+                    values='sum_str_log')
+
+    # Calculate median and SD across all samples for each locus
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculate mu and sd estimates\n')
-    sum_str_wide.drop(['locus'], axis = 1, inplace = True)
     locus_estimates = pd.DataFrame(list(zip(
-        np.median(sum_str_wide, axis = 1), np.std(sum_str_wide, axis = 1)
+        np.median(sum_str_log_wide, axis = 1), np.std(sum_str_log_wide, axis = 1)
         )), columns = ['mu', 'sd'])
-    locus_estimates.index = sum_str_wide.index
+    locus_estimates.index = sum_str_log_wide.index
 
     # Where sd is NA, replace with the minimum non-zero sd from all loci
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
@@ -287,7 +287,7 @@ def main():
 
         locus_estimates.loc['null_locus_counts'] = null_locus_counts_est
 
-        n = len(sum_str_wide.columns)
+        n = len(sum_str_log_wide.columns)
         locus_estimates['n'] = n
 
         locus_estimates.to_csv(emit_file, sep= '\t')
@@ -299,32 +299,32 @@ def main():
         control_estimates = parse_controls(control_file)
         # Get a list of all loci in the control file but not the sample data
         control_loci_df = control_estimates.iloc[control_estimates.index != 'null_locus_counts']
-        control_loci = [x for x in control_loci_df.index if x not in sum_str_wide.index]
+        control_loci = [x for x in control_loci_df.index if x not in sum_str_log_wide.index]
 
         # Extract and order just those control estimates appearing in the current data
-        mu_sd_estimates = control_estimates.reindex(sum_str_wide.index)
+        mu_sd_estimates = control_estimates.reindex(sum_str_log_wide.index)
         # Fill NaNs with null_locus_counts values
         mu_sd_estimates.fillna(control_estimates.loc['null_locus_counts'],
                                 inplace=True)
     else:
         # Extract and order estimates to match the current data
-        mu_sd_estimates = locus_estimates.reindex(sum_str_wide.index)
+        mu_sd_estimates = locus_estimates.reindex(sum_str_log_wide.index)
 
     # calculate z scores
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculating z scores\n')
-    z = z_score(sum_str_wide, mu_sd_estimates)
+    z = z_score(sum_str_log_wide, mu_sd_estimates)
 
     # If a control file is given, effectively add zeros counts at all loci in 
     # controls but not in the samples. 
     # These extra rows will dissapear due to a later merge
     if control_file != '': 
-        # Create a sum_str_wide as if all loci have zero counts
-        null_sum_str_wide = pd.DataFrame(columns = sample_names, index = control_loci)
-        null_sum_str_wide.fillna(null_locus_counts, inplace = True)
+        # Create a sum_str_log_wide as if all loci have zero counts
+        null_sum_str_log_wide = pd.DataFrame(columns = sample_names, index = control_loci)
+        null_sum_str_log_wide.fillna(null_locus_counts, inplace = True)
         # Caculate z scores
-        null_z = z_score(null_sum_str_wide, 
-                            control_estimates.reindex(null_sum_str_wide.index))
+        null_z = z_score(null_sum_str_log_wide,
+                            control_estimates.reindex(null_sum_str_log_wide.index))
         loci_with_counts = z.index
         z = z.append(null_z)
 
