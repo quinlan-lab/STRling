@@ -119,7 +119,7 @@ def p_adj_bh(x):
     '''Adjust p values using Benjamini/Hochberg method'''
     # Mask out nan values as they cause the multiptests algorithm to return all nan
     mask = np.isfinite(x)
-    pval_corrected = x
+    pval_corrected = x.copy()
     pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted = False)[1]
     return pval_corrected
 
