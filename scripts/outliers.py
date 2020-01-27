@@ -185,14 +185,6 @@ def main():
     sys.stderr.write('Read {} samples. Making locus column\n'.format(len(all_samples)))
 
     genotype_data['locus'] = genotype_data['chrom'] + '-' + genotype_data['left'].astype(str) + '-' + genotype_data['right'].astype(str) + '-' + genotype_data['repeatunit']
-    sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Reset index\n')
-    genotype_data = genotype_data.reset_index(drop=True)
-
-#XXX some testing here - remove
-#    genotype_data.reset_index(drop=True, inplace=True)
-#    genotype_data.to_csv("test.csv")
-#    genotype_data.loc[genotype_data.duplicated(subset = ['locus', 'sample'])].to_csv("test-duplicates.tsv", sep = '\t')
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculating median sample depths\n')
@@ -211,7 +203,6 @@ def main():
     sample_cols = list(set(genotype_data['sample']))
 
     # Remove rows that are all 0 or all NA
-    #sum_str_wide[(sum_str_wide.sum(axis = ) == 0) | (x[:,1] == 0.)]
     mask = np.all(np.isnan(sum_str_wide) | np.equal(sum_str_wide, 0), axis=1)
     sum_str_wide = sum_str_wide[~mask]
     sum_str_wide['locus'] = sum_str_wide.index
@@ -258,7 +249,6 @@ def main():
 
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
-
     sum_str_log_wide = genotype_data.pivot(index='locus', columns='sample',
                     values='sum_str_log')
 
@@ -349,7 +339,6 @@ def main():
             warnings.simplefilter("ignore", RuntimeWarning)
 
             pvals = pd.DataFrame(norm.sf(z), index = z.index, columns = z.columns)
-
         sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
         sys.stderr.write('Adjust p values\n')
         if pvals.isnull().values.all(): # Don't bother adjusting p values if all are null
