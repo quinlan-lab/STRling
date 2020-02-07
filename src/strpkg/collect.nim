@@ -28,7 +28,7 @@ type Support* = object
   SpanningReadCigarInsertionLen*: uint8
   SpanningReadCigarDeletionLen*: uint8
   repeat*: string
-  qname: string
+  qname*: string
 
 proc tostring*(s:Support, b:Bounds, chrom:string): string =
   result = &"{chrom}\t{b.left}\t{b.right}\t{s.Type}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}\t{s.qname}"
@@ -49,7 +49,7 @@ proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, 
 
 proc find_read_position(A: Record, position:int): int =
   var
-    r_off = A.start
+    r_off = A.start.int
     q_off = 0
   result = -1
 
