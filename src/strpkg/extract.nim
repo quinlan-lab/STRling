@@ -29,7 +29,7 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
   # we have an exact match to the reference.
   if aln.cigar.len == 1 and aln.cigar[0].op == CigarOp.match and aln.chrom in genome_str:
     var empty: seq[region]
-    if aln.chrom notin genome_str or not genome_str[aln.chrom].find(aln.start, aln.stop, empty):
+    if aln.chrom notin genome_str or not genome_str[aln.chrom].find(aln.start.int, aln.stop.int, empty):
       align_length = aln.cigar[0].len
       return
 
