@@ -346,7 +346,35 @@ def main():
         else:
             # Adjust p values using Benjamini/Hochberg method
             adj_pvals = pvals.apply(p_adj_bh, axis=0) # apply to each column
+
+        # Only report adjusted p values when sum_str_count > 0
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Adjust p values for sum_str_count > 0 only\n')
+        sum_str_wide = genotype_data.pivot(index='locus', columns='sample',
+                    values='sum_str_counts')
+        pvals_pos = pvals.copy()
+        pvals_pos[sum_str_wide <= 0] = np.nan
+        adj_pvals_pos = pvals_pos.apply(p_adj_bh, axis=0) # apply to each column
         
+        adj_pvals_pos['locus'] = adj_pvals_pos.index
+        adj_pvals_long_pos = pd.melt(adj_pvals_pos, id_vars = 'locus',
+                                value_vars = sample_cols, value_name = 'p_adj_pos',
+                                var_name = 'sample')
+        genotype_data = pd.merge(genotype_data, adj_pvals_long_pos)
+
+        # Only report adjusted p values when outlier > 0
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Adjust p values for z > 0 only\n')
+        pvals_z = pvals.copy()
+        pvals_z[z <= 0] = np.nan
+        adj_pvals_z = pvals_z.apply(p_adj_bh, axis=0) # apply to each column
+
+        adj_pvals_z['locus'] = adj_pvals_z.index
+        adj_pvals_long_z = pd.melt(adj_pvals_z, id_vars = 'locus',
+                                value_vars = sample_cols, value_name = 'p_adj_z',
+                                var_name = 'sample')
+        genotype_data = pd.merge(genotype_data, adj_pvals_long_z)
+
         # Merge pvals and z scores back into genotypes
         sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
         sys.stderr.write('Merge adjusted p values\n')
@@ -383,15 +411,18 @@ def main():
                                     'spanning_reads', 'spanning_pairs',
                                     'left_clips', 'right_clips', 'unplaced_pairs',
                                     'sum_str_counts', 'sum_str_log', 'depth',
-                                    'outlier', 'p', 'p_adj',
+                                    'outlier', 'p', 'p_adj', 'p_adj_pos', 'p_adj_z'
                                     ]]
 
     #sort by outlier score then estimated size (bpInsertion), both descending
     write_data = write_data.sort_values(['p_adj', 'allele2_est'], ascending=[True, False])
     # Convert outlier and p_adj to numeric type and do some rounding/formatting
-    write_data['outlier'] = pd.to_numeric(write_data['outlier'])
+    #write_data['outlier'] = pd.to_numeric(write_data['outlier'])
     write_data['p_adj'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['p_adj']) ]
-    write_data = write_data.round({'outlier': 1, 'sum_str_log': 1,
+    write_data['p_adj_pos'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['p_adj_pos']) ]
+    write_data['p_adj_z'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['p_adj_z']) ]
+    #write_data = write_data.round({'outlier': 1, 'sum_str_log': 1,
+    write_data = write_data.round({'sum_str_log': 1,
                                     'sum_str_log': 1})
     int_cols = ['left', 'right', 'sum_str_counts', 'spanning_reads', 'spanning_pairs',
                 'left_clips', 'right_clips', 'unplaced_pairs']
