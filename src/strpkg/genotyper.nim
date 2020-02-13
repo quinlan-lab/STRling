@@ -4,6 +4,7 @@ import utils
 import tables
 import math
 import strformat
+import sets
 import hts/bam
 
 type Event = enum
@@ -38,6 +39,7 @@ type Call* = ref object
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
   overlapping_reads: uint
+  anchored_reads: uint
   spanning_reads: uint
   spanning_pairs: uint
   left_clips: uint
@@ -48,10 +50,10 @@ type Call* = ref object
   is_large*: bool
   # ...
 
-const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
+const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tanchored_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -107,8 +109,8 @@ proc spanning_pairs_est(reads: seq[Support]): Evidence =
       FragmentSizes.inc(read.SpanningFragmentLength)
       result.supporting_reads += 1
 
-# Use a linear model to estimate allele size in bp from sum
-# of counts of str repeat units in the anchored reads
+# Use a linear model to estimate allele size in bp from
+# sum of str counts in anchored and overlapping reads
 # result is in bp insertion from the reference
 proc anchored_lm(sum_str_counts: uint, depth: float): float =
   if sum_str_counts == 0:
@@ -164,13 +166,19 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   # XXX probably too lenient
   result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support
 
-
-  # Use anchored reads to estimate long allele
+  # Use anchored and overlapping reads to estimate long allele
   var sum_str_est = sum_str_est(tandems, depth)
   result.overlapping_reads = sum_str_est.supporting_reads
   result.sum_str_counts = sum_str_est.sum_str_counts
   var large_allele_bp = sum_str_est.allele2_bp
   result.allele2 = large_allele_bp/float(max(1, RUlen))
+
+  # Count anchored reads
+  var qnames: seq[string]
+  for tandem in tandems:
+    if tandem.split == Soft.none:
+      qnames.add(tandem.qname)
+  result.anchored_reads = uint(toHashSet(qnames).len)
 
   # Revise allele esimates using spanning pairs
 
