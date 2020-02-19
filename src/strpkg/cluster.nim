@@ -82,6 +82,14 @@ type Bounds* = object
   name*: string
   force_report*: bool
 
+import hashes
+proc hash*(b:Bounds): Hash =
+  var h:Hash = 0
+  h = h !& b.tid
+  h = h !& b.left.int32
+  h = h !& b.right.int32
+  result = !$h
+
 const bounds_header* = "#chrom\tleft\tright\trepeat\tname\tleft_most\tright_most\tcenter_mass\tn_left\tn_right\tn_total"
 
 proc `==`(a,b: Bounds): bool =
@@ -135,7 +143,7 @@ proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
 # Parse single line of a STRling bounds file
 proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.split("\t")
-  if len(l_split) != 11:
+  if len(l_split) notin [11, 12]:
     quit fmt"Error reading loci bed file. Expected 11 fields and got {len(l_split)} on line: {l}"
   result.tid = int32(get_tid(l_split[0], targets))
   result.left = uint32(parseInt(l_split[1]))
