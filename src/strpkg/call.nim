@@ -24,6 +24,24 @@ import ./unpack
 export tread
 export Soft
 
+const n_sims = 100
+const each_n = 2
+proc string_hash(s:string, sim_i:int): uint64 {.inline.} =
+  # djb's string hash
+  result = 5381
+  for c in s:
+    result = ((result shl 5) + result) + c.uint64
+
+  for c in $sim_i:
+    result = ((result shl 5) + result) + c.uint64
+
+proc filter_sims[T:tread|Support](trs: seq[T], sim_i: int, each_n:int): seq[T] =
+  result = trs
+  if result.len == 0: return
+  randomize(sim_i + 1)
+  shuffle(result)
+  result = result[0..<max(1, int(result.len/each_n))]
+
 proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
@@ -143,6 +161,8 @@ proc call_main*() =
     # Parse -bounds.txt file of regions. These will also be genotyped
     bounds = parse_bounds(args.bounds, opts.targets)
     stderr.write_line &"Read {len(bounds)} bounds from {args.bounds}"
+  else:
+    quit "-b bounds file is required for this branch"
 
   # Merge loci and bounds, with loci overwriting bounds
   for bound in bounds.mitems:
@@ -159,96 +179,76 @@ proc call_main*() =
   for locus in loci:
     bounds.add(locus)
 
-  var unplaced_counts = initCountTable[string]()
-  var genotypes_by_repeat = initTable[string, seq[Call]]()
 
   # Assign STR reads to provided bounds and genotype them
-  for bound in bounds.mitems:
-    var str_reads = assign_reads_locus(bound, treads_by_tid_rep)
-    if bound.right - bound.left > 1000'u32:
-      stderr.write_line "large bounds:" & $bound & " skipping"
-      continue
-    var (spans, median_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
-    if spans.len > 5_000:
-      when defined(debug):
-        stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
-      continue
-    if median_depth == -1:
-      continue
+  t0 = cpuTime()
 
-    var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
+  var spansByBound = initTable[Bounds, seq[Support]]()
+  var treadsByBound = initTable[Bounds, seq[tread]]()
+  var medByBound = initTable[Bounds, int]()
+  for sim_i in 0..<n_sims:
+    echo "sim:", sim_i, " time:", cpuTime() - t0
+    t0 = cpuTime()
+    var unplaced_counts = initCountTable[string]()
+    var genotypes_by_repeat = initTable[string, seq[Call]]()
 
-    var canon_repeat = bound.repeat.canonical_repeat
-    if not genotypes_by_repeat.hasKey(canon_repeat):
-      genotypes_by_repeat[canon_repeat] = @[]
-    genotypes_by_repeat[canon_repeat].add(gt)
+    for bound in bounds.mitems:
 
-    #var estimate = spans.estimate_size(frag_dist)
-    bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
-    when defined(debug):
-      for s in spans:
-        span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
-      var locusid = bound.id(opts.targets)
-      for r in str_reads:
-        reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
-
-  # Cluster remaining reads and genotype
-  var ci = 0
-
-  for key, treads in treads_by_tid_rep.mpairs:
-    ## treads are for the single tid, repeat unit defined by key
-    for c in treads.cluster(max_dist=opts.window.uint32, min_supporting_reads=opts.min_support):
-      if c.reads[0].tid == -1:
-        unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
+      if bound.right - bound.left > 1000'u32:
+        stderr.write_line "large bounds:" & $bound & " skipping"
         continue
 
-      var b: Bounds
-      var good_cluster: bool
-      (b, good_cluster) = bounds(c, min_clip, min_clip_total)
-      if good_cluster == false:
-        continue
+      if bound notin treadsByBound:
+        treadsByBound[bound] = assign_reads_locus(bound, treads_by_tid_rep)
+      var str_reads = treadsByBound[bound].filter_sims(sim_i, each_n)
 
-      var (spans, median_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      if bound notin spansByBound:
+        var (s, md) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+        spansByBound[bound] = s
+        medByBound[bound] = md
+
+      var spans = spansByBound[bound].filter_sims(sim_i, each_n)
+      var median_depth = medByBound[bound]
+
       if spans.len > 5_000:
         when defined(debug):
-          stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
+          stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
         continue
       if median_depth == -1:
         continue
 
-      var gt = genotype(b, c.reads, spans, opts, float(median_depth))
+      var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
 
-      var canon_repeat = b.repeat.canonical_repeat
+      var canon_repeat = bound.repeat.canonical_repeat
       if not genotypes_by_repeat.hasKey(canon_repeat):
         genotypes_by_repeat[canon_repeat] = @[]
       genotypes_by_repeat[canon_repeat].add(gt)
 
       #var estimate = spans.estimate_size(frag_dist)
-      bounds_fh.write_line b.tostring(opts.targets) & "\t" & $median_depth
-
+      bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
       when defined(debug):
         for s in spans:
-          span_fh.write_line s.tostring(b, opts.targets[b.tid].name)
-        for s in c.reads:
-          reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
-      ci += 1
+          span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
+        var locusid = bound.id(opts.targets)
+        for r in str_reads:
+          reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
 
-  # Loop through again and refine genotypes for loci that are the only
-  # large expansion with that repeat unit
-  for repeat, genotypes in genotypes_by_repeat:
-    var gt_expanded: seq[Call]
-    for gt in genotypes:
-      if gt.is_large:
-        gt_expanded.add(gt)
-        if gt_expanded.len > 1:
-          break
-    if gt_expanded.len == 1:
-      gt_expanded[0].update_genotype(unplaced_counts[repeat])
-    for gt in genotypes:
-      gt_fh.write_line gt.tostring()
+    # Loop through again and refine genotypes for loci that are the only
+    # large expansion with that repeat unit
+    for repeat, genotypes in genotypes_by_repeat:
+      var gt_expanded: seq[Call]
+      for gt in genotypes:
+        if gt.is_large:
+          gt_expanded.add(gt)
+          if gt_expanded.len > 1:
+            break
+      if gt_expanded.len == 1:
+        gt_expanded[0].update_genotype(unplaced_counts[repeat])
+      for gt in genotypes:
+        gt_fh.write_line gt.tostring()
 
-  for repeat, count in unplaced_counts:
-      unplaced_fh.write_line &"{repeat}\t{count}"
+    for repeat, count in unplaced_counts:
+        unplaced_fh.write_line &"{repeat}\t{count}"
 
   gt_fh.close
   bounds_fh.close
