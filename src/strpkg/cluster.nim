@@ -135,7 +135,7 @@ proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
 # Parse single line of a STRling bounds file
 proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =
   var l_split = l.split("\t")
-  if len(l_split) != 11:
+  if len(l_split) notin [11, 12]:
     quit fmt"Error reading loci bed file. Expected 11 fields and got {len(l_split)} on line: {l}"
   result.tid = int32(get_tid(l_split[0], targets))
   result.left = uint32(parseInt(l_split[1]))

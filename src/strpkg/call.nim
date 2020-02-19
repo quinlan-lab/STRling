@@ -25,30 +25,39 @@ import sets
 export tread
 export Soft
 
-  # read all qnames into a set for simulations
-proc read_qnames(bam_path:string, fasta:string): seq[string] =
+{.push optimization:speed checks:off stackTrace:off.}
 
-  var R = initHashSet[string]()
-  var ibam:Bam
-  if not open(ibam, bam_path, fai=fasta, threads=3):
+proc string_hash(s:cstring): uint64 {.inline.} =
+  result = 5381
+  for c in s:
+    result = ((result shl 5) + result) + c.uint64
+
+proc read_qnames(bam_path:string, fasta:string): seq[uint64] =
+
+  result = newSeqOfCap[uint64](65536)
+  var xbam:Bam
+  if not open(xbam, bam_path, fai=fasta, threads=3, index=true):
     quit "could not open bam file:" & bam_path
-  discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME.int + SAM_FLAG.int)
+  discard xbam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME.int + SAM_FLAG.int)
 
-  for aln in ibam:
+  for aln in xbam:
     let f = aln.flag
     if not f.read1: continue
     if f.supplementary or f.secondary: continue
-    doAssert not R.containsOrIncl(aln.qname)
+    #doAssert not R.containsOrIncl(aln.qname.hashstr)
+    if result.len mod 10_000_000 == 0:
+      stderr.write_line "hash len:", $result.len, " @", $aln.chrom, ":", $aln.start
+    result.add(aln.qname.string_hash)
 
-  for aln in ibam.query("*"):
+  for aln in xbam.query("*"):
     let f = aln.flag
     if not f.read1: continue
     if f.supplementary or f.secondary: continue
-    R.incl(aln.qname)
+    result.add(aln.qname.string_hash)
+  xbam.close
+  xbam = nil
+{.pop.}
 
-  result = newSeqOfCap[string](R.len)
-  for qname in R:
-    result.add(qname)
 
 proc call_main*() =
   var p = newParser("strling call"):
@@ -96,7 +105,8 @@ proc call_main*() =
 
   when defined(sims_std):
     var qnames = read_qnames(args.bam, args.fasta)
-    stderr.write_line &"[strling] read {qname_set.len} reads into set"
+    stderr.write_line &"[strling] read {qnames.len} reads into set"
+    GC_fullCollect()
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
   discard ibam_dist.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
@@ -111,7 +121,7 @@ proc call_main*() =
   ibam_dist.close()
   ibam_dist = nil
   var ibam:Bam
-  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
+  if not open(ibam, args.bam, fai=args.fasta, threads=1, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
@@ -176,6 +186,11 @@ proc call_main*() =
     stderr.write_line &"Read {len(bounds)} bounds from {args.bounds}"
 
   # Merge loci and bounds, with loci overwriting bounds
+  when defined(sims_std):
+    let n_sims = 100
+  else:
+    let n_sims = 1
+
   for bound in bounds.mitems:
     for i, locus in loci:
       if locus.overlaps(bound):
@@ -185,10 +200,6 @@ proc call_main*() =
         # Remove locus from loci (therefore will use first matching bound and locus)
         loci.del(i)
         break
-  when defined(sims_std):
-    let n_sims = 100
-  else:
-    let n_sims = 1
 
   # Add any remaining loci to bounds
   for locus in loci:
@@ -215,6 +226,7 @@ proc call_main*() =
     when defined(sims_std):
       let original_str_reads = str_reads
       let original_spans = spans
+      echo "OK"
 
     var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -222,84 +234,37 @@ proc call_main*() =
 
     #var spans: int
     #var median_depth: int
+    var n:int
     for rep in 0..<n_sims:
 
       when defined(sims_std):
         shuffle(qnames)
-        n = int(0.5 * len(qnames))
-        echo &"i: {i} subsampling to n: {n} reads"
-        qn_subset = qnames[0..<n].toSet
+        n = int(0.5 * len(qnames).float)
+        echo &"rep: {rep} subsampling to n: {n} reads"
+        let qn_subset = qnames[0..<n].toSet
         str_reads.setLen(0)
         spans.setLen(0)
         for o in original_str_reads:
-          if o.qname in qn_subset:
+          if o.qname.string_hash in qn_subset:
             str_reads.add(o)
         for o in original_spans:
-          if o.qname in qn_subset:
+          if o.qname.string_hash in qn_subset:
             spans.add(o)
 
       var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
       genotypes_by_repeat[canon_repeat].add(gt)
 
-    #var estimate = spans.estimate_size(frag_dist)
-      if rep == 0:
-        bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
-        when defined(debug):
-          for s in spans:
-            span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
-          var locusid = bound.id(opts.targets)
-          for r in str_reads:
-            reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
+      var estimate = spans.estimate_size(frag_dist)
+      bounds_fh.write_line bound.tostring(opts.targets) & "\t" & $median_depth
+      when defined(debug):
+        for s in spans:
+          span_fh.write_line s.tostring(bound, opts.targets[bound.tid].name)
+        var locusid = bound.id(opts.targets)
+        for r in str_reads:
+          reads_fh.write_line r.tostring(opts.targets) & "\t" & $locusid
 
+  when not defined(sims_std):
       # Cluster remaining reads and genotype
-      var ci = 0
-
-      for key, treads in treads_by_tid_rep.mpairs:
-        when defined(sims_std):
-          var original_treads = treads
-          treads.setLen(0)
-          for o in original_treads:
-            if o.qname in qn_subset:
-              treads.add(o)
-
-        ## treads are for the single tid, repeat unit defined by key
-        for c in treads.cluster(max_dist=opts.window.uint32, min_supporting_reads=opts.min_support):
-          if c.reads[0].tid == -1:
-            unplaced_counts[c.reads[0].repeat.tostring] = c.reads.len
-            continue
-
-          var b: Bounds
-          var good_cluster: bool
-          (b, good_cluster) = bounds(c, min_clip, min_clip_total)
-          if good_cluster == false:
-            continue
-
-          if rep == 0:
-            (spans, median_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
-          if spans.len > 5_000:
-            when defined(debug):
-              stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
-            continue
-          if median_depth == -1:
-            continue
-
-          var gt = genotype(b, c.reads, spans, opts, float(median_depth))
-
-          var canon_repeat = b.repeat.canonical_repeat
-          if not genotypes_by_repeat.hasKey(canon_repeat):
-            genotypes_by_repeat[canon_repeat] = @[]
-          genotypes_by_repeat[canon_repeat].add(gt)
-
-          #var estimate = spans.estimate_size(frag_dist)
-          bounds_fh.write_line b.tostring(opts.targets) & "\t" & $median_depth
-
-          when defined(debug):
-            for s in spans:
-              span_fh.write_line s.tostring(b, opts.targets[b.tid].name)
-            for s in c.reads:
-              reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
-          ci += 1
-
     # Loop through again and refine genotypes for loci that are the only
     # large expansion with that repeat unit
     for repeat, genotypes in genotypes_by_repeat:
