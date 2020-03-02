@@ -168,7 +168,7 @@ proc call_main*() =
     if bound.right - bound.left > 1000'u32:
       stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    var (spans, median_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    var (spans, median_depth, left_expected, right_expected) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
     if spans.len > 5_000:
       when defined(debug):
         stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
@@ -208,7 +208,7 @@ proc call_main*() =
       if good_cluster == false:
         continue
 
-      var (spans, median_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      var (spans, median_depth, left_expected, right_expected) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
       if spans.len > 5_000:
         when defined(debug):
           stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
