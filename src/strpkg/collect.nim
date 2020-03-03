@@ -132,14 +132,19 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
   var window_right = bounds.right.int + window
   var cd = frag_sizes.cumulative
   var depths = newSeq[int](window_right - window_left) # depth per base within the bounds
+
+  var expected_spanners_by_qname = initTable[string, float]()
   for aln in b.query(bounds.tid.int, max(0, window_left), window_right):
      if aln.flag.secondary or aln.flag.supplementary or aln.flag.dup: continue
      if aln.mapping_quality < min_mapq: continue
+     var prob = cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
+     if prob > 0:
 
-     # multiply by 0.5 since we are collecting from left and right and this
-     # corrects for double-counts
-     result.expected_spanners += 0.5 * cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
-
+       if aln.qname in expected_spanners_by_qname:
+         # if already present, we take average of estimate from each pair
+         expected_spanners_by_qname[aln.qname] = 0.5 * (expected_spanners_by_qname[aln.qname] + cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int))
+       else:
+         expected_spanners_by_qname[aln.qname] = cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
 
      depths[max(0, aln.start - window_left - 1)] += 1
      depths[min(depths.high, aln.stop - window_left - 1)] -= 1
@@ -160,6 +165,9 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
      if pairs.len > 20_000:
        stderr.write_line "high-depth for bounds:", bounds, " skipping"
        return (@[], -1, 0'f32)
+
+  for v in expected_spanners_by_qname.values:
+    result.expected_spanners += v
 
   for qname, pair in pairs:
     if len(pair) != 2: continue
