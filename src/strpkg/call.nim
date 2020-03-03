@@ -88,7 +88,7 @@ proc call_main*() =
   var opts = Options(median_fragment_length: frag_median,
                       min_clip: min_clip, min_clip_total: min_clip_total,
                       min_support: min_support, min_mapq: min_mapq,
-                      window: frag_dist.median(0.98),
+                      window: frag_dist.median(0.99),
                       targets: ibam.hdr.targets)
 
   # Unpack STR reads from bin file and put them in a table by repeat unit and chromosome
@@ -168,7 +168,8 @@ proc call_main*() =
     if bound.right - bound.left > 1000'u32:
       stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    var (spans, median_depth, left_expected, right_expected) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    var (spans, median_depth, expected_spanners) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    #echo "expected_spanners:", expected_spanners, " observed:", obs_spanners
     if spans.len > 5_000:
       when defined(debug):
         stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
@@ -177,6 +178,7 @@ proc call_main*() =
       continue
 
     var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
+    gt.expected_spanning_fragments = expected_spanners
 
     var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -208,7 +210,8 @@ proc call_main*() =
       if good_cluster == false:
         continue
 
-      var (spans, median_depth, left_expected, right_expected) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      var (spans, median_depth, expected_spanners) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      #echo "expected:", expected_spanners, " observed:", obs_spanners
       if spans.len > 5_000:
         when defined(debug):
           stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
@@ -217,6 +220,7 @@ proc call_main*() =
         continue
 
       var gt = genotype(b, c.reads, spans, opts, float(median_depth))
+      gt.expected_spanning_fragments = expected_spanners
 
       var canon_repeat = b.repeat.canonical_repeat
       if not genotypes_by_repeat.hasKey(canon_repeat):

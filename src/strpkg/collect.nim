@@ -125,7 +125,7 @@ proc estimate_size*(spanners: seq[Support], frag_sizes: array[4096, uint32]): in
 
 import ./spanning
 
-proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): tuple[support: seq[Support], median_depth: int, expected_plus_spanners: float32, expected_minus_spanners: float32] =
+proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): tuple[support: seq[Support], median_depth: int, expected_spanners: float32] =
   var pairs = newTable[string, seq[Record]]()
   doAssert left <= right
   var window_left = bounds.left.int - window
@@ -133,13 +133,12 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
   var cd = frag_sizes.cumulative
   var depths = newSeq[int](window_right - window_left) # depth per base within the bounds
   for aln in b.query(bounds.tid.int, max(0, window_left), window_right):
-     if aln.flag.secondary or aln.flag.supplementary: continue
+     if aln.flag.secondary or aln.flag.supplementary or aln.flag.dup: continue
      if aln.mapping_quality < min_mapq: continue
 
-     if aln.flag.reverse:
-       result.expected_plus_spanners += cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
-     else:
-       result.expected_minus_spanners += cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
+     # multiply by 0.5 since we are collecting from left and right and this
+     # corrects for double-counts
+     result.expected_spanners += 0.5 * cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
 
 
      depths[max(0, aln.start - window_left - 1)] += 1
@@ -160,7 +159,7 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
         stderr.write_line "memory usage. number of pairs:", pairs.len, " bounds:", bounds
      if pairs.len > 20_000:
        stderr.write_line "high-depth for bounds:", bounds, " skipping"
-       return (@[], -1, 0'f32, 0'f32)
+       return (@[], -1, 0'f32)
 
   for qname, pair in pairs:
     if len(pair) != 2: continue

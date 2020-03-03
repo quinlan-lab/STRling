@@ -20,7 +20,7 @@ proc cumulative*(frag_dist: array[4096, uint32]): cumulative_dist =
 proc expected_spanning_probability*(cd: cumulative_dist, read:Record, event_start: int, event_stop:int=event_start+1, min_spanning_bases:int=20): float =
 
   var dist: int
-  if read.start.int < event_stop:
+  if read.start.int < event_stop - min_spanning_bases:
     if read.flag.reverse: return
     dist = event_start - read.start.int
     if dist < 0: return
@@ -33,9 +33,7 @@ proc expected_spanning_probability*(cd: cumulative_dist, read:Record, event_star
 
   else:
     if not read.flag.reverse: return
-    var stop = stop(read).int
-
-    dist = stop.int - event_stop
+    dist = read.stop.int - event_stop
     if dist < 0: return
     if dist + (event_stop - event_start).int < min_spanning_bases:
       return
