@@ -99,7 +99,7 @@ def main():
     parse_bounds(boundsfiles).to_csv(args.out + '-bounds.csv', index=False)
 
     spansfiles = glob.glob(args.str_dir+"/*-spanning.txt")
-    if len(spansfiles) >= 0:
+    if len(spansfiles) > 0:
         parse_spans(spansfiles).to_csv(args.out + '-spans.csv', index=False)
 
     unplacedfiles = glob.glob(args.str_dir+"/*-unplaced.txt")
@@ -108,7 +108,7 @@ def main():
     parse_unplaced(unplacedfiles).to_csv(args.out + '-unplaced.csv', index=False)
 
     readsfiles = glob.glob(args.str_dir+"/*-reads.txt")
-    if len(readsfiles) >= 0:
+    if len(readsfiles) > 0:
         all_df_reads = []
         for f in readsfiles:
             df_reads = pd.read_csv(f, sep='\t')
