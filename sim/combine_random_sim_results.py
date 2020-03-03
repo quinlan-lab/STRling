@@ -99,9 +99,8 @@ def main():
     parse_bounds(boundsfiles).to_csv(args.out + '-bounds.csv', index=False)
 
     spansfiles = glob.glob(args.str_dir+"/*-spanning.txt")
-    if len(spansfiles) == 0:
-        sys.exit('ERROR: No -spanning.txt files found in the given directory: ' + args.str_dir)
-    parse_spans(spansfiles).to_csv(args.out + '-spans.csv', index=False)
+    if len(spansfiles) >= 0:
+        parse_spans(spansfiles).to_csv(args.out + '-spans.csv', index=False)
 
     unplacedfiles = glob.glob(args.str_dir+"/*-unplaced.txt")
     if len(unplacedfiles) == 0:
@@ -109,17 +108,16 @@ def main():
     parse_unplaced(unplacedfiles).to_csv(args.out + '-unplaced.csv', index=False)
 
     readsfiles = glob.glob(args.str_dir+"/*-reads.txt")
-    if len(readsfiles) == 0:
-        sys.exit('ERROR: No -reads.txt files found in the given directory: ' + args.str_dir)
-    all_df_reads = []
-    for f in readsfiles:
-        df_reads = pd.read_csv(f, sep='\t')
-        df_reads.rename(columns={"#chrom": "chrom"}, inplace=True)
-        df_reads['sim'] = get_sim_str(f)
-        all_df_reads.append(df_reads)
-    all_df = pd.concat(all_df_reads)
-    all_df = all_df.merge(bed_df, how='left', on='sim')
-    all_df.to_csv(args.out + '-results.csv', index=False)
+    if len(readsfiles) >= 0:
+        all_df_reads = []
+        for f in readsfiles:
+            df_reads = pd.read_csv(f, sep='\t')
+            df_reads.rename(columns={"#chrom": "chrom"}, inplace=True)
+            df_reads['sim'] = get_sim_str(f)
+            all_df_reads.append(df_reads)
+        all_df = pd.concat(all_df_reads)
+        all_df = all_df.merge(bed_df, how='left', on='sim')
+        all_df.to_csv(args.out + '-results.csv', index=False)
 
 if __name__ == "__main__":
     main()
