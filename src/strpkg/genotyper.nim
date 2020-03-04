@@ -164,7 +164,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
 
   # Set is_large to true for very minimal requirements same as for a bound to be called.
   # XXX probably too lenient
-  result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support
+  result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support and result.allele2 > float(opts.median_fragment_length)
 
   # Use anchored and overlapping reads to estimate long allele
   var sum_str_est = sum_str_est(tandems, depth)
