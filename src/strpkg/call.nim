@@ -19,10 +19,33 @@ import ./genotyper
 import ./genome_strs
 import ./extract
 import ./callclusters
+import algorithm
+import math
 import ./unpack
 
 export tread
 export Soft
+
+template pctile(oes:seq[float32], needle:float32): float32 =
+  oes.lowerBound(needle).float32 / oes.high.float32
+
+template oe_ratio(c:Call): float32 =
+  let obs = c.spanning_pairs.float32
+  let exp = c.expected_spanning_fragments
+  (1'f32 + obs - exp) / (exp + 1'f32)
+
+
+proc add_percentile(gtbr: var Table[string, seq[Call]]) =
+  var oes = newSeqOfCap[float32](65536)
+  for k, calls in gtbr:
+    for c in calls:
+      oes.add(c.oe_ratio)
+
+  sort(oes)
+  for k, calls in gtbr.mpairs:
+    for c in calls.mitems:
+      c.spanning_fragments_oe_percentile = oes.pctile(c.oe_ratio)
+
 
 proc call_main*() =
   var p = newParser("strling call"):
@@ -236,6 +259,8 @@ proc call_main*() =
         for s in c.reads:
           reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
       ci += 1
+
+  genotypes_by_repeat.add_percentile
 
   # Loop through again and refine genotypes for loci that are the only
   # large expansion with that repeat unit
