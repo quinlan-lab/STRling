@@ -191,7 +191,7 @@ proc call_main*() =
     if bound.right - bound.left > 1000'u32:
       stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    var (spans, median_depth, expected_spanners) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    var (spans, median_depth, expected_spanners, expected_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
     #echo "expected_spanners:", expected_spanners, " observed:", obs_spanners
     if spans.len > 5_000:
       when defined(debug):
@@ -202,6 +202,7 @@ proc call_main*() =
 
     var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
     gt.expected_spanning_fragments = expected_spanners
+    gt.expected_depth = expected_depth
 
     var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -233,7 +234,7 @@ proc call_main*() =
       if good_cluster == false:
         continue
 
-      var (spans, median_depth, expected_spanners) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      var (spans, median_depth, expected_spanners, expected_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
       #echo "expected:", expected_spanners, " observed:", obs_spanners
       if spans.len > 5_000:
         when defined(debug):
@@ -244,6 +245,7 @@ proc call_main*() =
 
       var gt = genotype(b, c.reads, spans, opts, float(median_depth))
       gt.expected_spanning_fragments = expected_spanners
+      gt.expected_depth = expected_depth
 
       var canon_repeat = b.repeat.canonical_repeat
       if not genotypes_by_repeat.hasKey(canon_repeat):

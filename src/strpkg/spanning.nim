@@ -4,18 +4,20 @@ import hts/bam
 
 type cumulative_dist* = array[4096, float32]
 
-proc cumulative*(frag_dist: array[4096, uint32]): cumulative_dist =
+proc cumulative*(frag_dist: array[4096, uint32]): tuple[cd: cumulative_dist, pdf:cumulative_dist] =
   # this returns a cumulative distribution that indicates the proportion of
   # fragments with length less than the given index.
   for i in 0..<frag_dist.len:
     const window = 11
     for j in max(0, i - window)..min(i+window, frag_dist.high):
-      result[i] += frag_dist[j].float32
+      result.cd[i] += frag_dist[j].float32
+    result.pdf[i] = result.cd[i]
 
-  result.cumsum
-  var fmax = result[result.high].float32
-  for i, v in result:
-    result[i] = v.float32 / fmax
+  result.cd.cumsum
+  var fmax = result.cd[result.cd.high].float32
+  for i, v in result.cd:
+    result.pdf[i] = result.pdf[i] / fmax
+    result.cd[i] = v.float32 / fmax
 
 proc expected_spanning_probability*(cd: cumulative_dist, read:Record, event_start: int, event_stop:int=event_start+1, min_spanning_bases:int=20): float =
 

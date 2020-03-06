@@ -125,18 +125,19 @@ proc estimate_size*(spanners: seq[Support], frag_sizes: array[4096, uint32]): in
 
 import ./spanning
 
-proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): tuple[support: seq[Support], median_depth: int, expected_spanners: float32] =
+proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32], min_mapq:uint8=20, max_size:int=5000): tuple[support: seq[Support], median_depth: int, expected_spanners: float32, expected_depth:float32] =
   var pairs = newTable[string, seq[Record]]()
   doAssert left <= right
   var window_left = bounds.left.int - window
   var window_right = bounds.right.int + window
-  var cd = frag_sizes.cumulative
+  var (cd, pdf) = frag_sizes.cumulative
   var depths = newSeq[int](window_right - window_left) # depth per base within the bounds
 
   var expected_spanners_by_qname = initTable[string, float]()
   for aln in b.query(bounds.tid.int, max(0, window_left), window_right):
      if aln.flag.secondary or aln.flag.supplementary or aln.flag.dup: continue
      if aln.mapping_quality < min_mapq: continue
+
      var prob = cd.expected_spanning_probability(aln, bounds.left.int, bounds.right.int)
      if prob > 0:
 
@@ -148,6 +149,19 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
 
      depths[max(0, aln.start - window_left - 1)] += 1
      depths[min(depths.high, aln.stop - window_left - 1)] -= 1
+
+     # use sequence length of this read (l_qseq) to infer expected length of mate
+     # strand doesn't matter as it's the same calculate either way.
+     var dist: int
+     if aln.flag.reverse:
+       dist = aln.stop.int - bounds.right.int
+     else:
+       dist = bounds.left.int - aln.start.int
+
+     if dist - aln.b.core.l_qseq >= 0:
+       #let lo = min(frag_sizes.high, dist - aln.b.core.l_qseq)
+       #echo "dist:", dist, " score:", sum(pdf[min(frag_sizes.high, dist - aln.b.core.l_qseq)..min(frag_sizes.high, dist)]).float32
+       result.expected_depth += sum(pdf[min(frag_sizes.high, dist - aln.b.core.l_qseq)..min(frag_sizes.high, dist)]).float32
 
      var s:Support
      if aln.overlapping_read(bounds, s):
@@ -164,7 +178,7 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
         stderr.write_line "memory usage. number of pairs:", pairs.len, " bounds:", bounds
      if pairs.len > 20_000:
        stderr.write_line "high-depth for bounds:", bounds, " skipping"
-       return (@[], -1, 0'f32)
+       return (@[], -1, 0'f32, 0'f32)
 
   for v in expected_spanners_by_qname.values:
     result.expected_spanners += v
