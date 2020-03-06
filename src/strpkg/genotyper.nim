@@ -25,7 +25,7 @@ type Evidence = object
   allele2_reads: uint
   supporting_reads: uint
   sum_str_counts: uint
- 
+
 type Call* = ref object
   chrom: string
   start: uint
@@ -38,22 +38,24 @@ type Call* = ref object
   # and confidence intervals around the allele size esimates
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
-  overlapping_reads: uint
-  anchored_reads: uint
-  spanning_reads: uint
-  spanning_pairs: uint
-  left_clips: uint
-  right_clips: uint
-  unplaced_reads: int # only used for genotypes with unique repeat units
+  overlapping_reads: uint32
+  anchored_reads: uint32
+  spanning_reads: uint32
+  expected_spanning_fragments*: float32
+  spanning_fragments_oe_percentile*:float32
+  spanning_pairs*: uint32
+  left_clips: uint32
+  right_clips: uint32
+  unplaced_reads: int32 # only used for genotypes with unique repeat units
   depth: float #median depth in region
-  sum_str_counts: uint
+  sum_str_counts: uint32
   is_large*: bool
   # ...
 
-const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tanchored_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
+const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tanchored_reads\tspanning_reads\tspanning_pairs\texpected_spanning_pairs\tspanning_pairs_pctl\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
+  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.expected_spanning_fragments:.2f}\t{c.spanning_fragments_oe_percentile:.2f}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -157,19 +159,19 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
     var spanning_read_est = spanning_read_est(spanners)
     if spanning_read_est.allele1_bp.classify != fcNaN:
       result.allele1 = spanning_read_est.allele1_bp/float(max(1, RUlen))
-    result.spanning_reads = spanning_read_est.supporting_reads
+    result.spanning_reads = spanning_read_est.supporting_reads.uint32
 
     var spanning_pairs_est = spanning_pairs_est(spanners)
-    result.spanning_pairs = spanning_pairs_est.supporting_reads
+    result.spanning_pairs = spanning_pairs_est.supporting_reads.uint32
 
   # Set is_large to true for very minimal requirements same as for a bound to be called.
   # XXX probably too lenient
-  result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support
+  result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support and result.allele2 > float(opts.median_fragment_length)
 
   # Use anchored and overlapping reads to estimate long allele
   var sum_str_est = sum_str_est(tandems, depth)
-  result.overlapping_reads = sum_str_est.supporting_reads
-  result.sum_str_counts = sum_str_est.sum_str_counts
+  result.overlapping_reads = sum_str_est.supporting_reads.uint32
+  result.sum_str_counts = sum_str_est.sum_str_counts.uint32
   var large_allele_bp = sum_str_est.allele2_bp
   result.allele2 = large_allele_bp/float(max(1, RUlen))
 
@@ -178,7 +180,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   for tandem in tandems:
     if tandem.split == Soft.none:
       qnames.add(tandem.qname)
-  result.anchored_reads = uint(toHashSet(qnames).len)
+  result.anchored_reads = uint32(toHashSet(qnames).len)
 
   # Revise allele esimates using spanning pairs
 
@@ -186,6 +188,6 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   # (probably can't be done until all loci are genotyped)
 proc update_genotype*(call: var Call, unplaced_reads: int) =
   var RUlen = len(call.repeat)
-  call.unplaced_reads = unplaced_reads
+  call.unplaced_reads = unplaced_reads.int32
   if unplaced_reads > 2:
     call.allele2 = unplaced_est(unplaced_reads, call.depth)/float(RUlen)
