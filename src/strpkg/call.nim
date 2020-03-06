@@ -19,10 +19,33 @@ import ./genotyper
 import ./genome_strs
 import ./extract
 import ./callclusters
+import algorithm
+import math
 import ./unpack
 
 export tread
 export Soft
+
+template pctile(oes:seq[float32], needle:float32): float32 =
+  oes.lowerBound(needle).float32 / oes.high.float32
+
+template oe_ratio(c:Call): float32 =
+  let obs = c.spanning_pairs.float32
+  let exp = c.expected_spanning_fragments
+  (1'f32 + obs - exp) / (exp + 1'f32)
+
+
+proc add_percentile(gtbr: var Table[string, seq[Call]]) =
+  var oes = newSeqOfCap[float32](65536)
+  for k, calls in gtbr:
+    for c in calls:
+      oes.add(c.oe_ratio)
+
+  sort(oes)
+  for k, calls in gtbr.mpairs:
+    for c in calls.mitems:
+      c.spanning_fragments_oe_percentile = oes.pctile(c.oe_ratio)
+
 
 proc call_main*() =
   var p = newParser("strling call"):
@@ -88,7 +111,7 @@ proc call_main*() =
   var opts = Options(median_fragment_length: frag_median,
                       min_clip: min_clip, min_clip_total: min_clip_total,
                       min_support: min_support, min_mapq: min_mapq,
-                      window: frag_dist.median(0.98),
+                      window: frag_dist.median(0.99),
                       targets: ibam.hdr.targets)
 
   # Unpack STR reads from bin file and put them in a table by repeat unit and chromosome
@@ -168,7 +191,8 @@ proc call_main*() =
     if bound.right - bound.left > 1000'u32:
       stderr.write_line "large bounds:" & $bound & " skipping"
       continue
-    var (spans, median_depth) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    var (spans, median_depth, expected_spanners) = ibam.spanners(bound, opts.window, frag_dist, opts.min_mapq)
+    #echo "expected_spanners:", expected_spanners, " observed:", obs_spanners
     if spans.len > 5_000:
       when defined(debug):
         stderr.write_line &"High depth for bound {opts.targets[bound.tid].name}:{bound.left}-{bound.right} got {spans.len} pairs. Skipping."
@@ -177,6 +201,7 @@ proc call_main*() =
       continue
 
     var gt = genotype(bound, str_reads, spans, opts, float(median_depth))
+    gt.expected_spanning_fragments = expected_spanners
 
     var canon_repeat = bound.repeat.canonical_repeat
     if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -208,7 +233,8 @@ proc call_main*() =
       if good_cluster == false:
         continue
 
-      var (spans, median_depth) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      var (spans, median_depth, expected_spanners) = ibam.spanners(b, opts.window, frag_dist, opts.min_mapq)
+      #echo "expected:", expected_spanners, " observed:", obs_spanners
       if spans.len > 5_000:
         when defined(debug):
           stderr.write_line &"High depth for bound {opts.targets[b.tid].name}:{b.left}-{b.right} got {spans.len} pairs. Skipping."
@@ -217,6 +243,7 @@ proc call_main*() =
         continue
 
       var gt = genotype(b, c.reads, spans, opts, float(median_depth))
+      gt.expected_spanning_fragments = expected_spanners
 
       var canon_repeat = b.repeat.canonical_repeat
       if not genotypes_by_repeat.hasKey(canon_repeat):
@@ -232,6 +259,8 @@ proc call_main*() =
         for s in c.reads:
           reads_fh.write_line s.tostring(opts.targets) & "\t" & $ci
       ci += 1
+
+  genotypes_by_repeat.add_percentile
 
   # Loop through again and refine genotypes for loci that are the only
   # large expansion with that repeat unit
