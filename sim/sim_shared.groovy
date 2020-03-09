@@ -146,8 +146,7 @@ str_call = {
     def sample = branch.name.prefix
 
     from (sample + ".str.bin", sample + ".bam", "strling-bounds.txt") produce(
-            sample + "-reads.txt", sample + "-bounds.txt",
-            sample + "-spanning.txt", sample + "-unplaced.txt",
+            sample + "-bounds.txt", sample + "-unplaced.txt",
             sample + "-genotype.txt") {
     
         def bamname = get_fname(input.bam)
