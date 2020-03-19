@@ -149,7 +149,6 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
   # potentially adjust A position by B
 
   result = true
-
   # when B has hi mapping quality, we adjust A if:
   # A is very repetitive and B is not very repetitive
   # A is mapped poorly, B is mapped well and it's not a proper pair
@@ -176,6 +175,14 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
         A.position = B_position + B.align_length.uint32
 
     # if we have adjusted A based on B, then any split is not informative.
+    if A.split != Soft.none:
+      # the split affects the align-length. we no longer have the original
+      # length, but we can set it to the max, re-check p_repeat and skip if
+      # it's not high enough.
+      A.align_length = max(A.align_length, B.align_length)
+      if A.p_repeat < 0.7:
+        return false
+
     A.split = Soft.none
     A.tid = B.tid
     A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
