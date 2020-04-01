@@ -126,7 +126,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
     # If read is soft-clipped on the left take the read position as the start of read
     # If soft-clipped on the right take the read position to the the end of the alignment
     var position = if cig_index == 0: max(0, aln.start).uint32 else: max(0, aln.stop).uint32
-    cache.cache.add(tread(tid:aln.tid.int32,
+    var tr = tread(tid:aln.tid.int32,
                   position: position,
                   flag: aln.flag,
                   repeat: repeat,
@@ -135,7 +135,10 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
                   split: if cig_index == 0: Soft.left else: Soft.right,
                   mapping_quality: aln.mapping_quality,
                   qname: aln.qname
-                  ))
+                  )
+    # require higher repeat percentage for soft-clips
+    if tr.p_repeat < 0.9: continue
+    cache.cache.add(tr)
 
 proc should_reverse(f:Flag): bool {.inline.} =
   ## this is only  called after we've ensured hi-quality of mate and lo-quality
@@ -180,7 +183,7 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
       # length, but we can set it to the max, re-check p_repeat and skip if
       # it's not high enough.
       A.align_length = max(A.align_length, B.align_length)
-      if A.p_repeat < 0.7:
+      if A.p_repeat < 0.8:
         return false
 
     A.split = Soft.none

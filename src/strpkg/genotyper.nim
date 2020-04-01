@@ -151,6 +151,10 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   result.repeat = b.repeat
   result.depth = depth
   var RUlen = len(result.repeat)
+  if b.left == 133294574:
+    for tr in tandems: echo tr
+    echo spanners
+    echo result[]
 
   # Check for spanning reads - indicates a short allele
   if spanners.len == 0:
