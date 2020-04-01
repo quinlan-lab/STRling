@@ -128,7 +128,6 @@ proc sum_str_est(reads: seq[tread], depth: float): Evidence =
   result.supporting_reads = uint(len(reads))
   for tread in reads:
     result.sum_str_counts += tread.repeat_count
-    result.supporting_reads += 1
   result.allele2_bp = anchored_lm(result.sum_str_counts, depth)
 
 # Use a linear model to estimate allele size in bp the number of unplaced reads
