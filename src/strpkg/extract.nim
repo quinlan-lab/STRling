@@ -268,7 +268,7 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
 
 proc extract_main*() =
   # Parse args/options
-  var p = newParser("str extract"):
+  var p = newParser("strling extract"):
     option("-f", "--fasta", help="path to fasta file (required for CRAM)")
     option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")

@@ -21,8 +21,8 @@ proc get_mate(aln:Record, ibam:Bam): Record =
 
 proc extract_region_main*() =
 
-  var p = newParser("extract bam region"):
-    option("--fasta", help="path to fasta file, only required for cram")
+  var p = newParser("strling pull_region"):
+    option("-f", "--fasta", help="path to fasta file, only required for cram")
     option("-o", "--output-bam", help="path to output bam", default="extracted.bam")
     arg("bam")
     arg("region")
