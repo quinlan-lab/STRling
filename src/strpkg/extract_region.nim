@@ -27,7 +27,12 @@ proc extract_region_main*() =
     arg("bam")
     arg("region")
 
-  var opts = p.parse()
+  var argv = commandLineParams()
+  if len(argv) > 0 and argv[0] == "pull_region":
+    argv = argv[1..argv.high]
+  if len(argv) == 0: argv = @["-h"]
+
+  var opts = p.parse(argv)
   if opts.help:
     quit 0
 
