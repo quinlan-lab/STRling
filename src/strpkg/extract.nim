@@ -37,19 +37,6 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
   aln.sequence(read)
   align_length = len(read)
 
-  if aln.cigar.len > 0:
-    # we only test the aligned part of the read for repeats.
-    # if it is soft-clipped, those are checked separately anyway.
-    if aln.cigar[0].op == CigarOp.soft_clip:
-      read = read[aln.cigar[0].len..<read.len]
-      align_length -= aln.cigar[0].len
-
-    var L = aln.cigar.len
-    if aln.cigar[L-1].op == CigarOp.soft_clip:
-      read = read[0..<read.len-aln.cigar[L-1].len]
-      align_length -= aln.cigar[L-1].len
-
-
   result = read.get_repeat(counts, repeat_count, opts, false)
 
 
