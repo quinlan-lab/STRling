@@ -15,7 +15,7 @@ mutate_locus = {
             $PYTHON $TOOLS/random_str_alleles.py
                 --locus "7 117143769 117143769 CAG"
                 --out $dir/
-                --num 150
+                --num 300
                 --min 0
                 --max 600
                 --fixed 0
