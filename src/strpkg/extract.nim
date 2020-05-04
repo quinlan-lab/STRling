@@ -37,19 +37,6 @@ proc get_repeat*(aln:Record, genome_str:TableRef[string, Lapper[region]], counts
   aln.sequence(read)
   align_length = len(read)
 
-  if aln.cigar.len > 0:
-    # we only test the aligned part of the read for repeats.
-    # if it is soft-clipped, those are checked separately anyway.
-    if aln.cigar[0].op == CigarOp.soft_clip:
-      read = read[aln.cigar[0].len..<read.len]
-      align_length -= aln.cigar[0].len
-
-    var L = aln.cigar.len
-    if aln.cigar[L-1].op == CigarOp.soft_clip:
-      read = read[0..<read.len-aln.cigar[L-1].len]
-      align_length -= aln.cigar[L-1].len
-
-
   result = read.get_repeat(counts, repeat_count, opts, false)
 
 
@@ -126,7 +113,7 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
     # If read is soft-clipped on the left take the read position as the start of read
     # If soft-clipped on the right take the read position to the the end of the alignment
     var position = if cig_index == 0: max(0, aln.start).uint32 else: max(0, aln.stop).uint32
-    cache.cache.add(tread(tid:aln.tid.int32,
+    var tr = tread(tid:aln.tid.int32,
                   position: position,
                   flag: aln.flag,
                   repeat: repeat,
@@ -135,7 +122,10 @@ proc add_soft*(cache:var Cache, aln:Record, counts: var Seqs[uint8], opts:Option
                   split: if cig_index == 0: Soft.left else: Soft.right,
                   mapping_quality: aln.mapping_quality,
                   qname: aln.qname
-                  ))
+                  )
+    # require higher repeat percentage for soft-clips
+    if tr.p_repeat < 0.9: continue
+    cache.cache.add(tr)
 
 proc should_reverse(f:Flag): bool {.inline.} =
   ## this is only  called after we've ensured hi-quality of mate and lo-quality
@@ -149,7 +139,6 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
   # potentially adjust A position by B
 
   result = true
-
   # when B has hi mapping quality, we adjust A if:
   # A is very repetitive and B is not very repetitive
   # A is mapped poorly, B is mapped well and it's not a proper pair
@@ -175,7 +164,6 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
       if B.split == Soft.none_right:
         A.position = B_position + B.align_length.uint32
 
-    # if we have adjusted A based on B, then any split is not informative.
     A.split = Soft.none
     A.tid = B.tid
     A.mapping_quality = max(A.mapping_quality, B.mapping_quality)
@@ -258,7 +246,7 @@ proc add(cache:var Cache, aln:Record, genome_str:TableRef[string, Lapper[region]
 
 proc extract_main*() =
   # Parse args/options
-  var p = newParser("str extract"):
+  var p = newParser("strling extract"):
     option("-f", "--fasta", help="path to fasta file (required for CRAM)")
     option("-g", "--genome-repeats", help="optional path to genome repeats file. if it does not exist, it will be created")
     option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
