@@ -86,8 +86,10 @@ proc count(A: Record, bounds:Bounds): int =
     return 0
 
   if read_left < 0: read_left = 0
-
-  return dna[read_left..<read_right].count(bounds.repeat)
+  let S = dna[read_left..<read_right]
+  result = S.count(bounds.repeat)
+  if result < int(S.len.float * 0.7 / bounds.repeat.len.float):
+    result = 0
 
 # Returns true if a read overlaps the bounds. Also records if the read spans
 # and counts STRs
@@ -163,7 +165,8 @@ proc spanners*(b:Bam, bounds:Bounds, window:int, frag_sizes: array[4096, uint32]
       if pairs.len mod 5000 == 0:
         stderr.write_line "memory usage. number of pairs:", pairs.len, " bounds:", bounds
      if pairs.len > 20_000:
-       stderr.write_line "high-depth for bounds:", bounds, " skipping"
+       when defined(debug):
+         stderr.write_line "high-depth for bounds:", bounds, " skipping"
        return (@[], -1, 0'f32)
 
   for v in expected_spanners_by_qname.values:

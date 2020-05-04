@@ -118,8 +118,8 @@ proc anchored_lm(sum_str_counts: uint, depth: float): float =
   if sum_str_counts == 0:
     return NaN
   #XXX These estimates are from the HTT simulation linear model, would be nice to generalize
-  var intercept = 4.35
-  var cofficient = 0.9209
+  var intercept = 4.3558142
+  var cofficient = 0.7565329
   var y = log2(float64(sum_str_counts)/max(1, depth) + 1) * cofficient + intercept
   return pow(2,y)
 
@@ -128,15 +128,14 @@ proc sum_str_est(reads: seq[tread], depth: float): Evidence =
   result.supporting_reads = uint(len(reads))
   for tread in reads:
     result.sum_str_counts += tread.repeat_count
-    result.supporting_reads += 1
   result.allele2_bp = anchored_lm(result.sum_str_counts, depth)
 
 # Use a linear model to estimate allele size in bp the number of unplaced reads
 # result is in bp insertion from the reference
 proc unplaced_est(unplaced_count: int, depth: float): float =
   # Estimate size in bp using number of unplaced reads
-  var intercept = 8.358
-  var cofficient = 0.803
+  var intercept = 8.9199168
+  var cofficient = 0.7595562
   var y = log2(float(unplaced_count)/depth + 1) * cofficient + intercept
   result = pow(2,y)
 
@@ -151,6 +150,10 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   result.repeat = b.repeat
   result.depth = depth
   var RUlen = len(result.repeat)
+  if b.left == 133294574:
+    for tr in tandems: echo tr
+    echo spanners
+    echo result[]
 
   # Check for spanning reads - indicates a short allele
   if spanners.len == 0:

@@ -1,4 +1,10 @@
 str
 tests/test_utils
 tests/test_strling
+src/strpkg/spanning
 tests/all
+src/strpkg/unpack
+src/strpkg/utils
+src/strpkg/simulate_reads
+src/strling
+*.swp

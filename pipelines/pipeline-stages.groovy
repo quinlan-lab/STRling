@@ -18,7 +18,6 @@ str_extract = {
             $STRLING extract
                 -f $REF
                 -g $str_ref
-                -v
                 ${input[input_type]}
                 $output.bin
         ""","strling"
@@ -30,7 +29,6 @@ str_merge = {
         exec """
             $STRLING merge
                 -f $REF
-                -v
                 $inputs.bin
         ""","strling"
     }
@@ -38,13 +36,12 @@ str_merge = {
 
 str_call_individual = {
     def sample = branch.name.prefix
-    from (sample + ".str.bin", sample + "." + input_type) produce(
+    from (sample + "*str.bin", sample + "*" + input_type) produce(
             sample + "-bounds.txt", sample + "-unplaced.txt",
             sample + "-genotype.txt") {
         exec """
             $STRLING call
                 -f $REF
-                -v
                 -o $sample
                 ${input[input_type]}
                 $input.bin
@@ -54,13 +51,12 @@ str_call_individual = {
 
 str_call_joint = {
     def sample = branch.name.prefix
-    from (sample + ".str.bin", sample + "." + input_type, "strling-bounds.txt") produce(
+    from (sample + "*str.bin", sample + "*" + input_type, "strling-bounds.txt") produce(
             sample + "-bounds.txt", sample + "-unplaced.txt",
             sample + "-genotype.txt") {
         exec """
             $STRLING call
                 -f $REF
-                -v
                 -b $input.txt
                 -o $sample
                 ${input[input_type]}
