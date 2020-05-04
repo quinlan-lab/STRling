@@ -4,6 +4,7 @@ import utils
 import tables
 import math
 import strformat
+import sets
 import hts/bam
 
 type Event = enum
@@ -38,6 +39,7 @@ type Call* = ref object
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
 <<<<<<< HEAD
+<<<<<<< HEAD
   overlapping_reads: uint
   spanning_reads: uint
   spanning_pairs: uint
@@ -45,6 +47,8 @@ type Call* = ref object
   right_clips: uint
   unplaced_reads: int # only used for genotypes with unique repeat units
 =======
+=======
+>>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
   overlapping_reads: uint32
   anchored_reads: uint32
   spanning_reads: uint32
@@ -54,23 +58,32 @@ type Call* = ref object
   left_clips: uint32
   right_clips: uint32
   unplaced_reads: int32 # only used for genotypes with unique repeat units
+<<<<<<< HEAD
 >>>>>>> a1b0e42... Spanning fragment calculations rebased on dev branch (#51)
+=======
+>>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
   depth: float #median depth in region
   sum_str_counts: uint32
   is_large*: bool
   # ...
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
   return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
 =======
+=======
+>>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
 const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tanchored_reads\tspanning_reads\tspanning_pairs\texpected_spanning_pairs\tspanning_pairs_pctl\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
   return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.expected_spanning_fragments:.2f}\t{c.spanning_fragments_oe_percentile:.2f}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
+<<<<<<< HEAD
 >>>>>>> a1b0e42... Spanning fragment calculations rebased on dev branch (#51)
+=======
+>>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
@@ -126,8 +139,8 @@ proc spanning_pairs_est(reads: seq[Support]): Evidence =
       FragmentSizes.inc(read.SpanningFragmentLength)
       result.supporting_reads += 1
 
-# Use a linear model to estimate allele size in bp from sum
-# of counts of str repeat units in the anchored reads
+# Use a linear model to estimate allele size in bp from
+# sum of str counts in anchored and overlapping reads
 # result is in bp insertion from the reference
 proc anchored_lm(sum_str_counts: uint, depth: float): float =
   if sum_str_counts == 0:
@@ -186,8 +199,7 @@ proc genotype*(b:Bounds, tandems: seq[tread], spanners: seq[Support],
   # XXX probably too lenient
   result.is_large = uint16(b.n_left) >= opts.min_clip and uint16(b.n_right) >= opts.min_clip and uint16(b.n_left + b.n_right) >= opts.min_clip_total and tandems.len >= opts.min_support and result.allele2 > float(opts.median_fragment_length)
 
-
-  # Use anchored reads to estimate long allele
+  # Use anchored and overlapping reads to estimate long allele
   var sum_str_est = sum_str_est(tandems, depth)
   result.overlapping_reads = sum_str_est.supporting_reads.uint32
   result.sum_str_counts = sum_str_est.sum_str_counts.uint32
