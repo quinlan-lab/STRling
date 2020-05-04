@@ -38,17 +38,6 @@ type Call* = ref object
   # and confidence intervals around the allele size esimates
   quality: float #XXX currently not in use
   # Number of supporting reads in each class
-<<<<<<< HEAD
-<<<<<<< HEAD
-  overlapping_reads: uint
-  spanning_reads: uint
-  spanning_pairs: uint
-  left_clips: uint
-  right_clips: uint
-  unplaced_reads: int # only used for genotypes with unique repeat units
-=======
-=======
->>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
   overlapping_reads: uint32
   anchored_reads: uint32
   spanning_reads: uint32
@@ -58,32 +47,15 @@ type Call* = ref object
   left_clips: uint32
   right_clips: uint32
   unplaced_reads: int32 # only used for genotypes with unique repeat units
-<<<<<<< HEAD
->>>>>>> a1b0e42... Spanning fragment calculations rebased on dev branch (#51)
-=======
->>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
   depth: float #median depth in region
   sum_str_counts: uint32
   is_large*: bool
   # ...
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\toverlapping_reads\tspanning_reads\tspanning_pairs\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
-
-proc tostring*(c: Call): string =
-  return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.overlapping_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
-=======
-=======
->>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
 const gt_header* = "#chrom\tleft\tright\trepeatunit\tallele1_est\tallele2_est\tanchored_reads\tspanning_reads\tspanning_pairs\texpected_spanning_pairs\tspanning_pairs_pctl\tleft_clips\tright_clips\tunplaced_pairs\tdepth\tsum_str_counts"
 
 proc tostring*(c: Call): string =
   return &"{c.chrom}\t{c.start}\t{c.stop}\t{c.repeat}\t{c.allele1:.2f}\t{c.allele2:.2f}\t{c.anchored_reads}\t{c.spanning_reads}\t{c.spanning_pairs}\t{c.expected_spanning_fragments:.2f}\t{c.spanning_fragments_oe_percentile:.2f}\t{c.left_clips}\t{c.right_clips}\t{c.unplaced_reads}\t{c.depth}\t{c.sum_str_counts}"
-<<<<<<< HEAD
->>>>>>> a1b0e42... Spanning fragment calculations rebased on dev branch (#51)
-=======
->>>>>>> d49ecae65cc82fc33f7b6b6c4f98ed2a4ef0b34d
 
 # Estimate the size of the smaller allele 
 # from reads that span the locus
