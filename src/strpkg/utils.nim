@@ -208,7 +208,7 @@ proc count*(read: var string, k: int, count: var Seq[uint8]): int {.inline.} =
   for enc in read.slide_by(k):
     count.inc(enc)
   if count.imax == -1: return 0
-  return count.A[count.imax].int
+  result = count.A[count.imax].int
 
 # Get a tid for a given chromosome name
 proc get_tid*(name:string, targets: seq[Target]): int =
@@ -246,6 +246,7 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
     var score = count * k
     if debug:
       echo k, " ", score, " ", s, " actual count:", read.count(s), " est count:", count
+
     if score <= best_score:
       if count < (read.len.float * 0.12 / k.float).int:
         break
@@ -262,11 +263,10 @@ proc get_repeat*(read: var string, counts: var Seqs[uint8], repeat_count: var in
         repeat_count = count
         if repeat_count > 0 and result[0] == '\0':
           quit "bad:" & $k & " " & $result & " " & "kmer:" & s
-    elif count < (read.len.float * 0.12 / k.float).int:
-      # e.g. for a 5 mer repeat, we should see some 2, 3, 4 mer reps and we can
-      # bail if we do not. this is an optimization to avoid counting when we
-      # cant possibly see a repeat.
-      break
+    # if we get here, then we could have a count from the kmers of $n for a
+    # reduced rotated kmer of, e.g. TG, but the real repat might be
+    # GTCGTCGTC... in which case there would be 0 of TG but we want to continue
+    # to find GTC
 
   repeat_count *= reduce_repeat(result)
 

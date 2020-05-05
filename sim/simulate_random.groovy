@@ -13,11 +13,11 @@ mutate_locus = {
     produce('*.bed') {
         exec """
             $PYTHON $TOOLS/random_str_alleles.py
-                --locus "4   3076604 3076695 CAG"
+                --locus "7 117143769 117143769 CAG"
                 --out $dir/
-                --num 100
-                --min -5
-                --max 200
+                --num 300
+                --min 0
+                --max 600
                 --fixed 0
                 --seed 7
         """
@@ -36,7 +36,7 @@ simulate_str_reads = {
         ~/storage/git/STRling/src/strpkg/simulate_reads
             --fasta $REF
             --output $output.prefix
-            $input.hist
+            $input.cram
             $input.bed
     """
 }
@@ -44,7 +44,7 @@ simulate_str_reads = {
 combine = {
 
         exec """
-            $PYTHON $TOOLS/combine_random_sim_results.py --bed_dir sim --str_dir str --out HTT
+            $PYTHON $TOOLS/combine_random_sim_results.py --bed_dir sim --str_dir str --out sim
         """
 }
 
