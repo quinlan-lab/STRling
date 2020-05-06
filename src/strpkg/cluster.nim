@@ -116,6 +116,8 @@ proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   result.left = uint32(parseInt(l_split[1]))
   result.right = uint32(parseInt(l_split[2]))
   result.repeat = l_split[3]
+  if result.repeat.len > 6:
+    quit &"ERROR: STRling currently only supports 1-6 bp repeat units. Input bed contains repeat unit length {result.repeat.len}\n{l}"
   # Ensure left_most and right_most are within the chromosome
   # (convert uint to int to allow negative numbers)
   result.left_most = uint32(max(int32(result.left) - int32(window), 0))
