@@ -91,7 +91,7 @@ proc merge_main*() =
 
 
   var opts = Options(median_fragment_length: frag_dist.median(0.98),
-                      min_support: min_support, min_mapq: min_mapq)
+                      min_support: min_support, min_mapq: min_mapq, targets: targets)
 
   if window < 0:
     window = frag_dist.median(0.98)
