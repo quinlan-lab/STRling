@@ -76,3 +76,13 @@ str_call_joint = {
     }
 }
 
+outliers = {
+    from("*-genotype.txt", "*-unplaced.txt") produce("all.STRs.tsv") {
+        exec """
+            $python $STRLING/scripts/outliers.py
+                --genotypes  *-genotype.txt
+                --unplaced *-unplaced.txt
+                --out $output.tsv.prefix.prefix
+        """
+    }
+}
