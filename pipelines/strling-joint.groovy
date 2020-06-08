@@ -8,5 +8,5 @@ run {
     str_index +
     "%.${input_type}" * [str_extract] +
     str_merge +
-    "%.bin" * [str_call_joint] //+ str_outlier
+    "%.bin" * [str_call_joint] + outliers
 }
