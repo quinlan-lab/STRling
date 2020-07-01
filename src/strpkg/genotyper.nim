@@ -67,13 +67,13 @@ proc spanning_read_est(reads: seq[Support]): Evidence =
     allele2_bp = NaN
     allele1_ru = NaN
     allele2_ru = NaN
-    RepeatCounts: CountTable[uint8]
-    Indels: CountTable[int8]
+    RepeatCounts: CountTable[uint16]
+    Indels: CountTable[int16]
 
   for read in reads:
     if read.Type == SupportType.SpanningRead:
       RepeatCounts.inc(read.SpanningReadRepeatCount)
-      Indels.inc(int8(read.SpanningReadCigarInsertionLen) - int8(read.SpanningReadCigarDeletionLen))
+      Indels.inc(int16(read.SpanningReadCigarInsertionLen) - int16(read.SpanningReadCigarDeletionLen))
       result.supporting_reads += 1
 
   if len(RepeatCounts) >= 2:
