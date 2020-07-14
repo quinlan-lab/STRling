@@ -167,15 +167,15 @@ proc check_reference_size*(b:Bounds, fai:Fai, chrom: string): int =
 
   result = reference[0..<min(right, reference.len)].count(b.repeat)
 
-proc genome_main*() =
+proc index_main*() =
 
-  var p = newParser("str genome-sites"):
-    option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.65")
+  var p = newParser("str index"):
+    option("-g", "--genome-repeats", help="optional path to output genome repeats file. if it does not exist, it will be created (default: ./<FASTA>.str)")
+    option("-p", "--proportion-repeat", help="proportion of read that is repetitive to be considered as STR", default="0.8")
     arg("fasta", help="path to fasta file")
-    arg("bed", help="path to output bed file to be created")
 
   var argv = commandLineParams()
-  if len(argv) > 0 and argv[0] == "genome-sites":
+  if len(argv) > 0 and argv[0] == "index":
     argv = argv[1..argv.high]
   if len(argv) == 0: argv = @["--help"]
 
@@ -183,12 +183,18 @@ proc genome_main*() =
   if args.help:
     quit 0
 
+  var genome_repeats = args.genome_repeats
+  if genome_repeats == "":
+    genome_repeats = lastPathPart(args.fasta) & ".str"
+
   var fai:Fai
   if not fai.open(args.fasta):
     quit &"[strling] couldn't open fasta {args.fasta} make sure file is present and has a .fai index"
 
+  stderr.write_line &"Writing genome str index to: {genome_repeats}"
+
   var opts = Options(proportion_repeat: parseFloat(args.proportion_repeat))
-  discard fai.genome_repeats(opts, args.bed)
+  discard fai.genome_repeats(opts, genome_repeats)
 
 when isMainModule:
 
@@ -201,6 +207,6 @@ when isMainModule:
       echo w.trim(dna)
   ]#
 
-  genome_main()
+  index_main()
 
 
