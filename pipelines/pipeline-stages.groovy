@@ -9,7 +9,18 @@ def get_fname(path) {
     def x = path.split("/")[-1]
     return(x)
 }
- 
+
+str_index = {
+    def str_ref = get_fname(REF) + ".str"
+    produce(str_ref) {
+        exec """
+            $STRLING index
+                $REF
+                -g $str_ref
+        ""","strling"
+    }
+}
+
 str_extract = {
     def sample = branch.name
     def str_ref = get_fname(REF) + ".str"
