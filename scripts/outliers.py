@@ -161,6 +161,8 @@ def main():
 
     unplaced_wide = unplaced_data
     # Fill zeros in unplaced counts
+    sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+    sys.stderr.write('Fill zeros in unplaced counts\n')
     unplaced_wide = unplaced_data.pivot(index='repeatunit', columns='sample',
                     values='unplaced_count').fillna(0)
     unplaced_wide['repeatunit'] = unplaced_wide.index
@@ -179,7 +181,9 @@ def main():
     # Parse genotype data
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Reading genotypes\n')
-    genotype_data = pd.concat( (parse_genotypes(f) for f in genotype_files), ignore_index = True)
+    genotype_data = pd.DataFrame()
+    for f in genotype_files:
+        genotype_data = pd.concat( (genotype_data, parse_genotypes(f)), ignore_index = True)
 
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Read {} samples. Making locus column\n'.format(len(all_samples)))
@@ -189,7 +193,7 @@ def main():
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculating median sample depths\n')
     # Calculate median depth per sample
-    sample_depths = genotype_data[['sample','depth']].groupby('sample').median(skipna=True)
+    sample_depths = genotype_data[['sample','depth']].groupby('sample').median()
     sample_depths['sample'] = sample_depths.index
     sample_depths.to_csv(base_filename + 'depths.tsv', sep= '\t', index = False, na_rep='NaN')
 
