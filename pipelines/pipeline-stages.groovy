@@ -1,4 +1,7 @@
-STRLING='strling'
+// Load pipeline configurations such as reference genome, locations of tools
+load "pipeline_config.groovy"
+
+strling='strling'
 
 if(args.any { it.endsWith('.cram') })
     input_type = 'cram'
@@ -26,7 +29,7 @@ str_extract = {
     def str_ref = get_fname(REF) + ".str"
     produce(sample + ".str.bin") {
         exec """
-            $STRLING extract
+            $strling extract
                 -f $REF
                 -g $str_ref
                 ${input[input_type]}
@@ -38,7 +41,7 @@ str_extract = {
 str_merge = {
     from("*.bin") produce("strling-bounds.txt") {
         exec """
-            $STRLING merge
+            $strling merge
                 -f $REF
                 $inputs.bin
         ""","merge"
@@ -51,7 +54,7 @@ str_call_individual = {
             sample + "-bounds.txt", sample + "-unplaced.txt",
             sample + "-genotype.txt") {
         exec """
-            $STRLING call
+            $strling call
                 -f $REF
                 -o $sample
                 ${input[input_type]}
@@ -66,7 +69,7 @@ str_call_joint = {
             sample + "-bounds.txt", sample + "-unplaced.txt",
             sample + "-genotype.txt") {
         exec """
-            $STRLING call
+            $strling call
                 -f $REF
                 -b $input.txt
                 -o $sample
@@ -77,12 +80,12 @@ str_call_joint = {
 }
 
 outliers = {
-    from("*-genotype.txt", "*-unplaced.txt") produce("all.STRs.tsv") {
+    from("*-genotype.txt", "*-unplaced.txt") produce("STRs.tsv") {
         exec """
             $python $STRLING/scripts/outliers.py
                 --genotypes  *-genotype.txt
                 --unplaced *-unplaced.txt
-                --out $output.tsv.prefix.prefix
+                --emit control-file.tsv
         """
     }
 }
