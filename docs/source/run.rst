@@ -5,6 +5,14 @@ Run
    :maxdepth: 2
    :caption: Contents:
 
+Creating a genome STR index (optional)
+--------------------------------------
+
+Creates a bed file of large STR regions in the reference genome. This step is peformed automatically as part of `strling extract`. However, when running multiple samples, it is more efficient to do it once, then pass the file to `strling extract` using the `-g` option.
+
+.. code-block:: bash
+
+    strling index $reference_fasta
 
 Single sample
 -------------
