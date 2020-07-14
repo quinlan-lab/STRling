@@ -5,5 +5,6 @@
 load 'pipeline-stages.groovy'
 
 run {
+    str_index +
     "%.${input_type}" * [str_extract + str_call_individual]
 }
