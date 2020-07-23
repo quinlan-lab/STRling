@@ -17,7 +17,7 @@ str_index = {
     def str_ref = get_fname(REF) + ".str"
     produce(str_ref) {
         exec """
-            $STRLING index
+            $strling index
                 $REF
                 -g $str_ref
         ""","strling"
