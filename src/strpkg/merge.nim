@@ -52,8 +52,9 @@ proc merge_main*() =
 
   var targets: seq[Target]
   var frag_dist: array[4096, uint32]
-  var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
+  var treads_by_tid_rep = newTable[tid_rep, seq[tread_id]](8192)
 
+  var sample_id: uint32 = 0
   for binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
     var extracted = fs.unpack_file()
@@ -76,13 +77,15 @@ proc merge_main*() =
       doAssert frag_dist[i] >= before, "overflow"
 
     # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
+    # Add a unique sample id for each sample to reads before clustering
     for r in extracted.reads:
-      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
+      var r_id = tread_id(tr: r, id: sample_id)
+      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread_id]()).add(r_id)
     stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
 
   for k, trs in treads_by_tid_rep.mpairs:
-    trs.sort(proc(a, b:tread): int =
-      cmp(a.position, b.position)
+    trs.sort(proc(a, b:tread_id): int =
+      cmp(a.tr.position, b.tr.position)
     )
 
   if args.verbose:

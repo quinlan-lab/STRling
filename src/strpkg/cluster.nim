@@ -348,18 +348,18 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
 
-type tread_id = object
-  tr: tread
-  id: uint32
+type tread_id* = object
+  tr*: tread
+  id*: uint32
 
-proc has_per_sample_reads(c:Cluster, supporting_reads:int, qname2sample:TableRef[string, uint32]): bool =
+proc has_per_sample_reads(c:Cluster, min_supporting_reads:int, qname2sample:TableRef[string, uint32]): bool =
   ## check that, within the cluster there are at least `supporting reads` from
   ## 1 sample.
   var sample_counts = initCountTable[uint32](8)
   for r in c.reads:
     sample_counts.inc(qname2sample[r.qname])
 
-  return sample_counts.largest().val >= supporting_reads
+  return sample_counts.largest().val >= min_supporting_reads
 
 iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   # reps passed here are guaranteed to be split by tid and repeat unit.
@@ -373,7 +373,7 @@ iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:in
       for c in trcluster(reps, max_dist, min_supporting_reads):
         yield c
 
-iterator cluster*(id_reps: var seq[tread_id], max_dist:uint32, supporting_reads:int=5): Cluster =
+iterator cluster*(id_reps: var seq[tread_id], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   # reps passed here are guaranteed to be split by tid and repeat unit.
   # need a lookup from qname -> sample and to extract the qreads from each sample.
   var qname2sample = newTable[string, uint32]()
@@ -383,7 +383,7 @@ iterator cluster*(id_reps: var seq[tread_id], max_dist:uint32, supporting_reads:
     reps.add(r.tr)
 
   # then call normal cluster iterator
-  for c in reps.cluster(max_dist, supporting_reads):
+  for c in reps.cluster(max_dist, min_supporting_reads):
     # then check if this cluster has enough reads from 1 sample.
-      if c.has_per_sample_reads(supporting_reads, qname2sample):
+      if c.has_per_sample_reads(min_supporting_reads, qname2sample):
         yield c
