@@ -53,8 +53,10 @@ proc merge_main*() =
   var targets: seq[Target]
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
+  # we use this to track (indirectly) which tread came from which sample.
+  var qname2sample = newTable[string, uint32]()
 
-  for binfile in args.bin:
+  for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
     var extracted = fs.unpack_file()
     fs.close()
@@ -76,8 +78,10 @@ proc merge_main*() =
       doAssert frag_dist[i] >= before, "overflow"
 
     # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
+    var sample_i = sample_i.uint32
     for r in extracted.reads:
       treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
+      qname2sample[r.qname] = sample_i
     stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
 
   for k, trs in treads_by_tid_rep.mpairs:
@@ -115,8 +119,15 @@ proc merge_main*() =
   # Cluster remaining reads
   var ci = 0
   for key, treads in treads_by_tid_rep.mpairs:
-    ## treads are for the single tid, repeat unit defined by key
-    for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
+
+    # create tread_ids by looking up sample-id from qname
+    var tread_ids = newSeqOfCap[tread_id](treads.len)
+    for tr in treads:
+      tread_ids.add(tread_id(tr: tr, id: qname2sample[tr.qname]))
+    ## tread_ids are for the single tid, repeat unit defined by key
+    ## this version of cluster enforces that a cluster has at least supporting_reads
+    ## from at least 1 sample.
+    for c in tread_ids.cluster(max_dist=window.uint32, supporting_reads=opts.min_support):
       if c.reads[0].tid == -1:
         continue
 
