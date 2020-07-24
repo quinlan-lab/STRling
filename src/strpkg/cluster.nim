@@ -348,9 +348,9 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
 
-type tread_id = object
-  tr: tread
-  id: uint32
+type tread_id* = object
+  tr*: tread
+  id*: uint32
 
 proc has_per_sample_reads(c:Cluster, supporting_reads:int, qname2sample:TableRef[string, uint32]): bool =
   ## check that, within the cluster there are at least `supporting reads` from
