@@ -80,7 +80,7 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0): tuple[targets
   stderr.write_line &"[strling] reading {n_reads} STR reads from bin file"
 
   while not fs.atEnd:
-    var t:tread
+    var t = tread()
     fs.unpack_type(t)
     result.reads.add(t)
 

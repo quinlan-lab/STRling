@@ -20,7 +20,7 @@ type Soft* {.size:1, pure.} = enum
   none_left ## looking at main part of read which is soft-clipped on the left
 
 # Data structure storing information about each read that looks like an STR
-type tread* = object
+type tread* = ref object
   tid*: int32
   position*: uint32
   repeat*: array[6, char]
@@ -30,6 +30,9 @@ type tread* = object
   repeat_count*: uint8
   align_length*: uint8
   qname*: string
+
+proc `$`*(t:tread): string =
+  system.`$`(t[])
 
 proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.tid)
@@ -348,9 +351,12 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
 
-type tread_id* = object
+type tread_id* = ref object
   tr*: tread
   id*: uint32
+
+proc `$`*(t:tread_id): string =
+  system.`$`(t[])
 
 proc has_per_sample_reads(c:Cluster, supporting_reads:int, qname2sample:TableRef[string, uint32]): bool =
   ## check that, within the cluster there are at least `supporting reads` from
