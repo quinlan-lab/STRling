@@ -78,9 +78,10 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0): tuple[targets
   var n_reads:int32
   fs.read(n_reads)
   stderr.write_line &"[strling] reading {n_reads} STR reads from bin file"
+  result.reads = newSeqOfCap[tread](nreads)
 
   while not fs.atEnd:
-    var t:tread
+    var t = tread()
     fs.unpack_type(t)
     result.reads.add(t)
 
