@@ -84,10 +84,16 @@ proc merge_main*() =
       qname2sample[r.qname] = sample_i
     stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
 
+  when defined(debug):
+    var ntr = 0
   for k, trs in treads_by_tid_rep.mpairs:
     trs.sort(proc(a, b:tread): int =
       cmp(a.position, b.position)
     )
+    when defined(debug):
+      ntr += trs.len
+  when defined(debug):
+    stderr.write_line &"[strling] read {ntr} total treads across all samples"
 
   if args.verbose:
     stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
@@ -119,6 +125,7 @@ proc merge_main*() =
   # Cluster remaining reads
   var ci = 0
   for key, treads in treads_by_tid_rep.mpairs:
+    shallow(treads)
 
     # create tread_ids by looking up sample-id from qname
     var tread_ids = newSeqOfCap[tread_id](treads.len)
@@ -127,6 +134,7 @@ proc merge_main*() =
     ## tread_ids are for the single tid, repeat unit defined by key
     ## this version of cluster enforces that a cluster has at least supporting_reads
     ## from at least 1 sample.
+    shallow(tread_ids)
     for c in tread_ids.cluster(max_dist=window.uint32, supporting_reads=opts.min_support):
       if c.reads[0].tid == -1:
         continue
