@@ -15,6 +15,16 @@ import ./unpack
 export tread
 export Soft
 
+proc has_per_sample_reads(c:Cluster, supporting_reads:int, tread2sample:TableRef[tread, uint32]): bool =
+  ## check that, within the cluster there are at least `supporting reads` from
+  ## 1 sample.
+  var sample_counts = initCountTable[uint32](8)
+  for r in c.reads:
+    sample_counts.inc(tread2sample[r])
+
+  return sample_counts.largest().val >= supporting_reads
+
+
 proc merge_main*() =
   var p = newParser("strling merge"):
     option("-f", "--fasta", help="path to fasta file (required if using CRAM input)")
@@ -54,7 +64,7 @@ proc merge_main*() =
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
   # we use this to track (indirectly) which tread came from which sample.
-  var qname2sample = newTable[string, uint32]()
+  var tread2sample = newTable[tread, uint32]()
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
@@ -79,15 +89,23 @@ proc merge_main*() =
 
     # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
     var sample_i = sample_i.uint32
-    for r in extracted.reads:
-      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeq[tread]()).add(r)
-      qname2sample[r.qname] = sample_i
-    stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
+    for r in extracted.reads.mitems:
+      # set qname empty to save a bit of memory.
+      r.qname = ""
+      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](8192)).add(r)
+      tread2sample[r] = sample_i
+    #stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
 
+  var ntr = 0
+  var n_unplaced = 0
   for k, trs in treads_by_tid_rep.mpairs:
     trs.sort(proc(a, b:tread): int =
       cmp(a.position, b.position)
     )
+    ntr += trs.len
+    for t in trs:
+      if t.tid < 0: n_unplaced.inc
+  stderr.write_line &"[strling] read {ntr} STR reads across all samples. unplaced: {n_unplaced} {100 * n_unplaced.float/ntr.float}%"
 
   if args.verbose:
     stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
@@ -119,17 +137,12 @@ proc merge_main*() =
   # Cluster remaining reads
   var ci = 0
   for key, treads in treads_by_tid_rep.mpairs:
+    shallow(treads)
 
-    # create tread_ids by looking up sample-id from qname
-    var tread_ids = newSeqOfCap[tread_id](treads.len)
-    for tr in treads:
-      tread_ids.add(tread_id(tr: tr, id: qname2sample[tr.qname]))
-    ## tread_ids are for the single tid, repeat unit defined by key
-    ## this version of cluster enforces that a cluster has at least supporting_reads
-    ## from at least 1 sample.
-    for c in tread_ids.cluster(max_dist=window.uint32, supporting_reads=opts.min_support):
+    for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
       if c.reads[0].tid == -1:
         continue
+      if not c.has_per_sample_reads(opts.min_support, tread2sample): continue
 
       var b: Bounds
       var good_cluster: bool
