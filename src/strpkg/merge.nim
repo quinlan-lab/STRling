@@ -68,7 +68,7 @@ proc merge_main*() =
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
-    var extracted = fs.unpack_file()
+    var extracted = fs.unpack_file(drop_unplaced=true)
     fs.close()
 
     # TODO: Check all bin files came from the same version of STRling
@@ -95,6 +95,8 @@ proc merge_main*() =
       treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](8192)).add(r)
       tread2sample[r] = sample_i
     #stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
+    for k, trs in treads_by_tid_rep.mpairs:
+      trs.setLen(trs.len)
 
   var ntr = 0
   var n_unplaced = 0
@@ -105,6 +107,7 @@ proc merge_main*() =
     ntr += trs.len
     for t in trs:
       if t.tid < 0: n_unplaced.inc
+    trs.setLen(trs.len)
   stderr.write_line &"[strling] read {ntr} STR reads across all samples. unplaced: {n_unplaced} {100 * n_unplaced.float/ntr.float}%"
 
   if args.verbose:
