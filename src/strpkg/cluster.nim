@@ -8,6 +8,7 @@ import itertools
 import hts/bam
 import strutils
 import utils
+import hashes
 
 type tid_rep* = tuple[tid:int32, repeat: array[6, char]]
 
@@ -20,7 +21,7 @@ type Soft* {.size:1, pure.} = enum
   none_left ## looking at main part of read which is soft-clipped on the left
 
 # Data structure storing information about each read that looks like an STR
-type tread* = object
+type tread* = ref object
   tid*: int32
   position*: uint32
   repeat*: array[6, char]
@@ -30,6 +31,12 @@ type tread* = object
   repeat_count*: uint8
   align_length*: uint8
   qname*: string
+
+proc hash*(t:tread): Hash =
+  return hash(cast[int](t))
+
+proc `$`*(t:tread): string =
+  result = system.`$`(t[])
 
 proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.tid)
@@ -348,19 +355,6 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
 
-type tread_id* = object
-  tr*: tread
-  id*: uint32
-
-proc has_per_sample_reads(c:Cluster, supporting_reads:int, qname2sample:TableRef[string, uint32]): bool =
-  ## check that, within the cluster there are at least `supporting reads` from
-  ## 1 sample.
-  var sample_counts = initCountTable[uint32](8)
-  for r in c.reads:
-    sample_counts.inc(qname2sample[r.qname])
-
-  return sample_counts.largest().val >= supporting_reads
-
 iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
   # reps passed here are guaranteed to be split by tid and repeat unit.
   if reps.len > 0:
@@ -371,19 +365,4 @@ iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:in
       yield Cluster(reads: reps)
     else:
       for c in trcluster(reps, max_dist, min_supporting_reads):
-        yield c
-
-iterator cluster*(id_reps: var seq[tread_id], max_dist:uint32, supporting_reads:int=5): Cluster =
-  # reps passed here are guaranteed to be split by tid and repeat unit.
-  # need a lookup from qname -> sample and to extract the qreads from each sample.
-  var qname2sample = newTable[string, uint32]()
-  var reps = newSeqOfCap[tread](id_reps.len)
-  for r in id_reps:
-    qname2sample[r.tr.qname] = r.id
-    reps.add(r.tr)
-
-  # then call normal cluster iterator
-  for c in reps.cluster(max_dist, supporting_reads):
-    # then check if this cluster has enough reads from 1 sample.
-      if c.has_per_sample_reads(supporting_reads, qname2sample):
         yield c
