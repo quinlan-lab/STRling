@@ -29,7 +29,7 @@ proc merge_main*() =
   var p = newParser("strling merge"):
     option("-f", "--fasta", help="path to fasta file (required if using CRAM input)")
     option("-w", "--window", help="Number of bp within which to search for reads supporting the other side of a bound. Estimated from the insert size distribution by default.", default = "-1")
-    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
+    option("-m", "--min-support", help="minimum number of supporting reads required in at least one individual for a locus to be reported", default="6")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
