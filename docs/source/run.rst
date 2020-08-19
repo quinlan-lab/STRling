@@ -34,21 +34,21 @@ Call strs on the extract binary data
 Joint calling
 -------------
 
-Extract informative pairs to a binary format for a single sample (same as above, you can use the same bin files)
+Extract informative read pairs to a binary format for a single sample (same as above, you can use the same bin files)
 
 .. code-block:: bash
 
   strling extract -f $reference_fasta /path/to/$sample2.cram $sample1.bin
   strling extract -f $reference_fasta /path/to/$sample2.cram $sample2.bin
 
-Joint call str loci across all samples
+Joint call str loci across all samples. Requires minimum read evidence from at least one sample.
 
 .. code-block:: bash
 
   mkdir -p str-results/
   strling merge --output-prefix str-results/joint -f $reference_fasta $sample1.bin $sample2.bin
 
-Call estimate allele sizes for each sample
+Call genotypes/estimate allele sizes for all loci in each sample
 
 .. code-block:: bash
 
