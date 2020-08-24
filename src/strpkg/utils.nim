@@ -92,7 +92,7 @@ proc fragment_length_distribution*(bam:Bam, n_reads:int=2_000_000, skip_reads:in
     if not aln.flag.proper_pair: continue
     if aln.flag.supplementary or aln.flag.secondary: continue
     if aln.isize < 0: continue
-    if aln.isize > result.len: continue
+    if aln.isize > result.high: continue
     if i < skip_reads:
       skipped.add(aln.copy())
       continue
@@ -107,7 +107,7 @@ proc fragment_length_distribution*(bam:Bam, n_reads:int=2_000_000, skip_reads:in
     stderr.write_line "using first reads in fragment_length_distribution calculation as there were not enough"
     for aln in skipped:
       if not aln.flag.proper_pair: continue
-      if aln.isize < 0 or aln.isize > result.len: continue
+      if aln.isize < 0 or aln.isize > result.high: continue
       result[aln.isize].inc
 
 type Seq*[T] = object
