@@ -41,7 +41,7 @@ str_merge = {
             $STRLING merge
                 -f $REF
                 $inputs.bin
-        ""","strling"
+        ""","merge"
     }
 }
 
@@ -72,7 +72,7 @@ str_call_joint = {
                 -o $sample
                 ${input[input_type]}
                 $input.bin
-        ""","strling"
+        ""","joint_call"
     }
 }
 
