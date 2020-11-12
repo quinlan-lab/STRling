@@ -294,7 +294,7 @@ iterator split_cluster*(c:Cluster, min_supporting_reads:int): Cluster =
     var rl = rights.largest
     var ll = lefts.largest
     # NOTE this currently looks only at the largest.
-    if rl.key < ll.key and rl.val > min_supporting_reads and ll.val > min_supporting_reads and ll.val.float / lefts.len.float > 0.5 and rl.val.float / rights.len.float > 0.5:
+    if rl.key < ll.key and rl.val >= min_supporting_reads and ll.val >= min_supporting_reads and ll.val.float / lefts.len.float > 0.5 and rl.val.float / rights.len.float > 0.5:
       var mid = uint32(0.5 + (rl.key.float + ll.key.float) / 2.0)
       var c1 = Cluster()
       var c2 = Cluster()
@@ -355,7 +355,7 @@ iterator trcluster*(reps: seq[tread], max_dist:uint32, min_supporting_reads:int)
     for sc in c.split_cluster(min_supporting_reads):
       yield sc
 
-iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int=5): Cluster =
+iterator cluster*(reps: var seq[tread], max_dist:uint32, min_supporting_reads:int): Cluster =
   # reps passed here are guaranteed to be split by tid and repeat unit.
   if reps.len > 0:
     doAssert reps[0].tid == reps[reps.high].tid and reps[0].repeat == reps[reps.high].repeat
