@@ -44,6 +44,7 @@ proc merge_main*() =
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files. Suffix will be -bounds.txt", default="strling")
+    flag("-d", "--diff-refs", help="allow bin files generated on a mixture of reference genomes (by default differing references will produce an error). Reports only the chromosomes provided in -f and requires a .fai")
     flag("-v", "--verbose")
     arg("bin", nargs = -1, help="One or more bin files previously created by `strling extract`")
 
@@ -52,9 +53,6 @@ proc merge_main*() =
     argv = argv[1..argv.high]
 
   if len(argv) == 0: argv = @["-h"]
-
-  # TODO: add flag
-  let allow_diff_chroms = true
 
   var args = p.parse(argv)
 
@@ -67,13 +65,14 @@ proc merge_main*() =
   var min_clip_total = uint16(parseInt(args.min_clip_total))
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
+  let allow_diff_chroms = args.diff_refs
 
   if args.bed != "":
     if not fileExists(args.bed):
       quit "couldn't open bed file"
 
   var targets: seq[Target]
-  if args.fasta != "":
+  if args.fasta != "" and allow_diff_chroms:
     targets.fill(args.fasta)
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
