@@ -94,10 +94,10 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0, drop_unplaced:
   result.targets = h.targets
   if targets.len > 0:
     if targets.len != result.targets.len or not result.targets.same(targets):
+      tidmap = initTable[int, int]()
       tidmap[-1] = -1
       var tmap = newTable[string, Target]()
       for t in targets: tmap[t.name] = t
-      tidmap = initTable[int, int]()
       for i, bt in result.targets:
         var ot = tmap.getOrDefault(bt.name, Target(tid: -1))
         tidmap[bt.tid] = ot.tid
