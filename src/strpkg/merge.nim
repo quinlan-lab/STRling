@@ -24,6 +24,15 @@ proc has_per_sample_reads(c:Cluster, supporting_reads:int, tread2sample:TableRef
 
   return sample_counts.largest().val >= supporting_reads
 
+proc fill(targets:var seq[Target], fasta:string) =
+  var fai:Fai
+  if not fai.open(fasta):
+    quit "could not open fasta:" & fasta
+
+  for i in 0..<fai.len:
+    let name = fai[i]
+    targets.add(Target(tid:i.int, name:name, length:fai.chrom_len(name).uint32))
+
 
 proc merge_main*() =
   var p = newParser("strling merge"):
@@ -44,6 +53,9 @@ proc merge_main*() =
 
   if len(argv) == 0: argv = @["-h"]
 
+  # TODO: add flag
+  let allow_diff_chroms = true
+
   var args = p.parse(argv)
 
   if args.help:
@@ -61,6 +73,8 @@ proc merge_main*() =
       quit "couldn't open bed file"
 
   var targets: seq[Target]
+  if args.fasta != "":
+    targets.fill(args.fasta)
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
   # we use this to track (indirectly) which tread came from which sample.
@@ -68,7 +82,7 @@ proc merge_main*() =
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
-    var extracted = fs.unpack_file(drop_unplaced=true)
+    var extracted = fs.unpack_file(drop_unplaced=true, targets=targets)
     fs.close()
 
     # TODO: Check all bin files came from the same version of STRling
@@ -79,7 +93,10 @@ proc merge_main*() =
       targets = extracted.targets
     else:
       if not extracted.targets.same(targets):
-        quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
+        if allow_diff_chroms:
+          targets = targets.same_lengths(extracted.targets)
+        else:
+          quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
 
     # Aggregate insert sizes for all samples
     for i in 0..frag_dist.high:
