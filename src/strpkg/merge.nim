@@ -81,7 +81,7 @@ proc merge_main*() =
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
-    var extracted = fs.unpack_file(drop_unplaced=true, targets=targets)
+    var extracted = fs.unpack_file(drop_unplaced=true)
     fs.close()
 
     # TODO: Check all bin files came from the same version of STRling
@@ -91,11 +91,8 @@ proc merge_main*() =
     if targets.len == 0:
       targets = extracted.targets
     else:
-      if not extracted.targets.same(targets):
-        if allow_diff_chroms:
-          targets = targets.same_lengths(extracted.targets)
-        else:
-          quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
+      if not extracted.targets.same(targets) and not allow_diff_chroms:
+        quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
 
     # Aggregate insert sizes for all samples
     for i in 0..frag_dist.high:
