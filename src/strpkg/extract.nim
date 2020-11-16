@@ -140,10 +140,9 @@ proc adjust_by*(A:var tread, B:tread, opts:Options, B_position:uint32): bool =
 
   result = true
   # when B has hi mapping quality, we adjust A if:
-  # A is very repetitive and B is not very repetitive
+  # A is repetitive and B is not very repetitive (0.2)
   # A is mapped poorly, B is mapped well and it's not a proper pair
-  # TODO: use opts.$param for 0.7 and 0.2
-  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > 0.7 and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
+  if B.mapping_quality > opts.min_mapq and ((A.p_repeat > opts.proportion_repeat and B.p_repeat < 0.2) or (not A.flag.proper_pair and A.mapping_quality < opts.min_mapq)):
     # B is right of A, so the position subtracts th fragment length
     # Note fragment size is the external distance
     if B.flag.reverse:
