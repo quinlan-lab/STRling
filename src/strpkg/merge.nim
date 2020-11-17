@@ -44,7 +44,7 @@ proc merge_main*() =
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files. Suffix will be -bounds.txt", default="strling")
-    flag("-d", "--diff-refs", help="allow bin files generated on a mixture of reference genomes (by default differing references will produce an error). Reports only the chromosomes provided in -f and requires a .fai")
+    flag("-d", "--diff-refs", help="allow bin files generated on a mixture of reference genomes (by default differing references will produce an error). Reports chromosomes in the first bin or -f if provided")
     flag("-v", "--verbose")
     arg("bin", nargs = -1, help="One or more bin files previously created by `strling extract`")
 
@@ -121,7 +121,7 @@ proc merge_main*() =
     for t in trs:
       if t.tid < 0: n_unplaced.inc
     trs.setLen(trs.len)
-  stderr.write_line &"[strling] read {ntr} STR reads across all samples. unplaced: {n_unplaced} {100 * n_unplaced.float/ntr.float}%"
+  stderr.write_line &"[strling] read {ntr} STR reads across all samples."
 
   if args.verbose:
     stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
