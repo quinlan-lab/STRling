@@ -24,6 +24,15 @@ proc has_per_sample_reads(c:Cluster, supporting_reads:int, tread2sample:TableRef
 
   return sample_counts.largest().val >= supporting_reads
 
+proc fill(targets:var seq[Target], fasta:string) =
+  var fai:Fai
+  if not fai.open(fasta):
+    quit "could not open fasta:" & fasta
+
+  for i in 0..<fai.len:
+    let name = fai[i]
+    targets.add(Target(tid:i.int, name:name, length:fai.chrom_len(name).uint32))
+
 
 proc merge_main*() =
   var p = newParser("strling merge"):
@@ -35,6 +44,7 @@ proc merge_main*() =
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
     option("-l", "--bed", help="Annoated bed file specifying additional STR loci to genotype. Format is: chr start stop repeatunit [name]")
     option("-o", "--output-prefix", help="prefix for output files. Suffix will be -bounds.txt", default="strling")
+    flag("-d", "--diff-refs", help="allow bin files generated on a mixture of reference genomes (by default differing references will produce an error). Reports chromosomes in the first bin or -f if provided")
     flag("-v", "--verbose")
     arg("bin", nargs = -1, help="One or more bin files previously created by `strling extract`")
 
@@ -55,12 +65,15 @@ proc merge_main*() =
   var min_clip_total = uint16(parseInt(args.min_clip_total))
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
+  let allow_diff_chroms = args.diff_refs
 
   if args.bed != "":
     if not fileExists(args.bed):
       quit "couldn't open bed file"
 
   var targets: seq[Target]
+  if args.fasta != "" and allow_diff_chroms:
+    targets.fill(args.fasta)
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
   # we use this to track (indirectly) which tread came from which sample.
@@ -78,7 +91,7 @@ proc merge_main*() =
     if targets.len == 0:
       targets = extracted.targets
     else:
-      if not extracted.targets.same(targets):
+      if not extracted.targets.same(targets) and not allow_diff_chroms:
         quit &"[strling] Error: inconsistent bam header for {binfile}. Were all samples run on the same reference genome?"
 
     # Aggregate insert sizes for all samples
@@ -108,7 +121,7 @@ proc merge_main*() =
     for t in trs:
       if t.tid < 0: n_unplaced.inc
     trs.setLen(trs.len)
-  stderr.write_line &"[strling] read {ntr} STR reads across all samples. unplaced: {n_unplaced} {100 * n_unplaced.float/ntr.float}%"
+  stderr.write_line &"[strling] read {ntr} STR reads across all samples."
 
   if args.verbose:
     stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
