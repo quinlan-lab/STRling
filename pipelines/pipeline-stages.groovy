@@ -1,7 +1,7 @@
 // Load pipeline configurations such as reference genome, locations of tools
-load "pipeline_config.groovy"
-
 strling='strling'
+python='python'
+load "pipeline_config.groovy"
 
 if(args.any { it.endsWith('.cram') })
     input_type = 'cram'
