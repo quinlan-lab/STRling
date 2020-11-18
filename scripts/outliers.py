@@ -9,15 +9,11 @@ with warnings.catch_warnings():
     import datetime
     import argparse
     import sys
-    import glob
     import os
-    #import re
     import numpy as np
-    import statsmodels.api as sm
     from scipy.stats import norm
     from statsmodels.sandbox.stats.multicomp import multipletests
     import pandas as pd
-    import pyranges as pr
 
 __author__ = "Harriet Dashnow"
 __credits__ = ["Harriet Dashnow"]
@@ -249,7 +245,6 @@ def main():
     null_locus_counts_est = pd.Series([
         np.median(null_locus_counts['depth']), np.std(null_locus_counts['depth'])
         ], index = ['mu', 'sd'])
-    #XXX do something if sd == 0?
 
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
