@@ -56,3 +56,5 @@ The main output for the strling-outliers script is `STRs.tsv`. The columns are t
 * outlier: z score testing for outliers
 * p: p value, is this locus significantly expanded relative to other samples?
 * p\_adj: p value adjusted for multiple testing per sample using the Benjamini-Hochberg method
+
+Note: p = 0.0 should be interpreted as p < 10e-310
