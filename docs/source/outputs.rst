@@ -34,3 +34,25 @@ Only output when compiled with `-d:debug`:
 
 * All str-like reads: `prefix-reads.txt`
 * Spanning reads and spanning pairs:`prefix-spanning.txt`
+
+The main output for the strling-outliers script is `STRs.tsv`. The columns are the same as above, except where specified:
+
+* chrom
+* left
+* right
+* locus: locus unique identifier in the form chrom-left-right-repeatunit
+* sample
+* repeatunit
+* allele1\_est
+* allele2\_est
+* spanning\_reads
+* spanning\_pairs
+* left\_clips
+* right\_clips
+* unplaced\_pairs
+* sum\_str\_counts
+* sum\_str\_log: log2 of depth normalized sum\_str\_counts
+* depth
+* outlier: z score testing for outliers
+* p: p value, is this locus significantly expanded relative to other samples?
+* p\_adj: p value adjusted for multiple testing per sample using the Benjamini-Hochberg method
