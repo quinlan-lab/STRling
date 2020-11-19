@@ -92,7 +92,7 @@ def parse_genotypes(filename, min_clips = 5):
 def parse_controls(control_file):
     """Parse control file with columns locus, median and standard deviation"""
 
-    control_estimates = pd.read_csv(control_file, index_col=0, delim_whitespace = True, header = None)
+    control_estimates = pd.read_csv(control_file, index_col=0, delim_whitespace = True, header = 0)
 
     # Allow for old style column headings, but change to mu and sd.
     if control_estimates.columns[0] in ['mu', 'median'] and control_estimates.columns[1] in ['sd', 'SD']:
@@ -309,6 +309,7 @@ def main():
     # These extra rows will dissapear due to a later merge
     if control_file != '': 
         # Create a sum_str_log_wide as if all loci have zero counts
+        sample_names = sample_depths.index
         null_sum_str_log_wide = pd.DataFrame(columns = sample_names, index = control_loci)
         null_sum_str_log_wide.fillna(null_locus_counts, inplace = True)
         # Caculate z scores
@@ -386,7 +387,7 @@ def main():
                                     ]]
 
     #sort by outlier score then estimated size (bpInsertion), both descending
-    write_data = write_data.sort_values(['p_adj', 'allele2_est'], ascending=[True, False])
+    write_data = write_data.sort_values(['outlier', 'allele2_est'], ascending=[False, False])
     # Convert outlier and p_adj to numeric type and do some rounding/formatting
     write_data['outlier'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['outlier']) ]
     write_data['p'] = [ format(x, '.2g') for x in pd.to_numeric(write_data['p']) ]
