@@ -59,4 +59,4 @@ Find outliers: loci that are expanded in one individual relative to other indivi
 
 .. code-block:: bash
 
-  python scripts/strling-outliers.py --genotypes *-genotype.txt --unplaced *-unplaced.txt
+  strling-outliers.py --genotypes *-genotype.txt --unplaced *-unplaced.txt
