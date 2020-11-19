@@ -18,7 +18,7 @@ with warnings.catch_warnings():
 __author__ = "Harriet Dashnow"
 __credits__ = ["Harriet Dashnow"]
 __license__ = "MIT"
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 __email__ = "h.dashnow@gmail.com"
 
 def parse_args():
