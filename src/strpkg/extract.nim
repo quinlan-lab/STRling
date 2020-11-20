@@ -318,7 +318,7 @@ proc extract_main*() =
 
     cache.add(aln, genome_str, counts, opts)
 
-  stderr.write_line "[strling] extracting unampped reads"
+  stderr.write_line "[strling] extracting unmapped reads"
   # get unmapped reads
   for aln in ibam.query("*"):
     if aln.flag.secondary or aln.flag.supplementary: continue
