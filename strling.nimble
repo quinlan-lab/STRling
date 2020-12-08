@@ -10,7 +10,7 @@ template thisModuleFile: string = instantiationInfo(fullPaths = true).filename
 #  # When the package is installed, the ``src`` directory disappears.
 #  import strpkg/version as _
 
-version       = "0.4.0"
+version       = "0.4.1"
 author        = "Harriet and Brent"
 description   = "Novel STR caller"
 license       = "MIT"
@@ -18,7 +18,7 @@ license       = "MIT"
 
 # Dependencies
 
-requires "nim >= 0.18.0", "kmer >= 0.2.2", "hts", "itertools", "argparse", "msgpack4nim", "lapper"
+requires "nim >= 0.18.0", "kmer >= 0.2.2", "hts", "itertools", "argparse >= 0.7.0 & < 1.0", "msgpack4nim", "lapper"
 bin = @["strling"]
 
 srcDir = "src"
