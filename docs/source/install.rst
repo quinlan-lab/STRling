@@ -22,6 +22,12 @@ We suggest conda installation if you want to perform outlier analysis, which req
   conda config --add channels bioconda
   conda install -y strling
 
+The following should now be in your path:  
+`strling`  
+`strling-outliers.py`
+
+Note: It should be safe to ignore "Solving environment: failed ..." messages as long as the message "Solving environment: done" appears following the failed message and the install proceeds.
+
 Install from source
 -------------------
 
