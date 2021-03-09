@@ -1,5 +1,4 @@
 # Package
-import ospaths
 template thisModuleFile: string = instantiationInfo(fullPaths = true).filename
 #
 
