@@ -81,7 +81,9 @@ proc merge_main*() =
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
-    var extracted = fs.unpack_file(drop_unplaced=true)
+    if args.verbose:
+      stderr.write_line &"[strling] reading bin file: ", binfile
+    var extracted = fs.unpack_file(drop_unplaced=true, verbose=args.verbose)
     fs.close()
 
     # TODO: Check all bin files came from the same version of STRling
@@ -121,11 +123,12 @@ proc merge_main*() =
     for t in trs:
       if t.tid < 0: n_unplaced.inc
     trs.setLen(trs.len)
-  stderr.write_line &"[strling] read {ntr} STR reads across all samples."
+  if args.verbose:
+    stderr.write_line &"[strling] read {ntr} STR reads across all samples."
 
   if args.verbose:
-    stderr.write_line "Calculated median fragment length accross all samples:", $frag_dist.median()
-    stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
+    stderr.write_line "[strling] Calculated median fragment length accross all samples:", $frag_dist.median()
+    stderr.write_line "[strling] 10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
 
   var opts = Options(median_fragment_length: frag_dist.median(0.98),
@@ -171,11 +174,11 @@ proc merge_main*() =
 
   bounds_fh.close
   if args.verbose:
-    stderr.write_line &"Wrote merged str bounds to {args.output_prefix}-bounds.txt"
+    stderr.write_line &"[strling] Wrote merged str bounds to {args.output_prefix}-bounds.txt"
 
 when isMainModule:
   when not defined(danger):
-   stderr.write_line "warning !!! not compiled in fast mode. Compile with -d:danger to increase speed"
+   stderr.write_line "[strling] WARNING!!! not compiled in fast mode. Compile with -d:danger to increase speed"
 
   # Parse args/options
   merge_main()
