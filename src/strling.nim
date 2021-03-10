@@ -25,6 +25,8 @@ proc main*() =
   var args = commandLineParams()
 
   stderr.write_line &"\nstrling version: {strlingVersion}"
+  when defined(debug):
+    stderr.write_line &"compiled in debug mode"
   if len(args) == 0 or not (args[0] in dispatcher):
     stderr.write_line "\nCommands: "
     for k, v in dispatcher:
