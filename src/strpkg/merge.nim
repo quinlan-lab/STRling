@@ -165,7 +165,8 @@ proc merge_main*() =
 
       var b: Bounds
       var good_cluster: bool
-      (b, good_cluster) = bounds(c, min_clip, min_clip_total)
+      let max_clip_dist: uint16 = uint16(0.5 * frag_dist.median(0.5).float)
+      (b, good_cluster) = bounds(c, min_clip, min_clip_total, max_clip_dist)
       if good_cluster == false:
         continue
 
