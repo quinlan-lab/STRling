@@ -117,6 +117,26 @@ suite "cluster suite":
     check b.left == 3
     check b.right == 4
 
+  test "test bounds: filter out soft-clips that are inconsistent with the center mass":
+    var reads = @[
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 100, split: Soft.right),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 123, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 223, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 223, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 223, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 253, split: Soft.none),
+      tread(tid:1'i32, repeat: ['A', 'T', 'G', '\x00', '\x00', '\x00'], position: 283, split: Soft.none),
+      ]
+
+    let max_clip_dist:uint16 = 50
+    var cl = Cluster(reads:reads)
+    var b = cl.bounds(max_clip_dist)
+    check b.left == 223
+    check b.right == 224
+    check b.left_most == 100
+    check b.right_most == 283
+    check b.center_mass == 223
+
 # This test is failing. Need to think about how to fix
 #  test "test bounds: no left soft-clipped reads so use median":
 #    var reads = @[

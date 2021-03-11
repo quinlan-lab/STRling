@@ -171,7 +171,9 @@ proc parse_bounds*(f:string, targets: seq[Target]): seq[Bounds] =
 
 
 # Find the bounds of the STR in the reference genome
-proc bounds*(cl:Cluster): Bounds =
+# max_clip_dist is set to 0.5 * median insert size elsewhere
+# (200 is an okay default for testing)
+proc bounds*(cl:Cluster, max_clip_dist:uint16=200): Bounds =
 
   var lefts = initCountTable[uint32](8)
   var rights = initCountTable[uint32](8)
@@ -184,15 +186,21 @@ proc bounds*(cl:Cluster): Bounds =
   doAssert cl.reads.len <= uint16.high.int, ("got too many reads for cluster with first read:" & $cl.reads[0])
 
   for r in cl.reads:
-    result.n_total.inc
-    if r.split == Soft.right:
-      # soft-clip of left indicates right end of variant
-      rights.inc(r.position)
-      result.n_right.inc
-    elif r.split == Soft.left:
+    posns.add(r.position)
+  result.center_mass = posns[int(posns.len / 2)]
+
+  # Check of soft-clip is too far away before adding it
+  for r in cl.reads:
+    if r.split == Soft.left and int32(r.position) < int32(result.center_mass) + int32(max_clip_dist):
       lefts.inc(r.position)
       result.n_left.inc
-    posns.add(r.position)
+      result.n_total.inc
+    elif r.split == Soft.right and int32(r.position) > int32(result.center_mass) - int32(max_clip_dist):
+      rights.inc(r.position)
+      result.n_right.inc
+      result.n_total.inc
+    else:
+      result.n_total.inc
 
   if lefts.len > 0:
     var ll = lefts.largest
@@ -203,8 +211,7 @@ proc bounds*(cl:Cluster): Bounds =
     if rr.val > 1:
       result.right = rr.key
 
-  if posns.len > 0:
-    result.center_mass = posns[int(posns.len / 2)]
+  if posns.len > 0: #necessary?
     if result.left == 0:
       result.left = result.center_mass
     if result.right == 0:
