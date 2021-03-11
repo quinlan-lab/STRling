@@ -49,11 +49,11 @@ proc assign_reads_locus*(locus: var Bounds, treads_by_tid_rep: TableRef[tid_rep,
       elif r.split == Soft.left:
         locus.n_left.inc
 
-proc bounds*(c: Cluster, min_clip: uint16, min_clip_total: uint16): (Bounds, bool) =
+proc bounds*(c: Cluster, min_clip: uint16, min_clip_total: uint16, max_clip_dist:uint16): (Bounds, bool) =
   if c.reads.len >= uint16.high.int:
     stderr.write_line "More than " & &"{uint16.high.int}" & " reads in cluster with first read:" & $c.reads[0] & " skipping"
     return
-  var b = c.bounds
+  var b = c.bounds(max_clip_dist)
   if b.right - b.left > 1000'u32:
     stderr.write_line "large bounds:" & $b & " skipping"
     return
