@@ -50,7 +50,7 @@ proc add_percentile(gtbr: var Table[string, seq[Call]]) =
 proc call_main*() =
   var p = newParser("strling call"):
     option("-f", "--fasta", help="path to fasta file")
-    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="6")
+    option("-m", "--min-support", help="minimum number of supporting reads for a locus to be reported", default="5")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
