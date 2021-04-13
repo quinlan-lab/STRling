@@ -11,6 +11,7 @@ with warnings.catch_warnings():
     import sys
     import os
     import numpy as np
+    import statsmodels.api as sm # for hubers
     from scipy.stats import norm
     from statsmodels.sandbox.stats.multicomp import multipletests
     import pandas as pd
@@ -105,6 +106,25 @@ def parse_controls(control_file):
         "or mu, sd. Column names are ", str(list(control_estimates.columns)),
         ". Check the file: ", control_file]))
     return(control_estimates)
+
+def hubers_est(x):
+    """Emit Huber's M-estimator median and SD estimates.
+    If Huber's fails, emit standard median and NA for sd"""
+    huber50 = sm.robust.scale.Huber(maxiter=50)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+
+        try:
+            mu, s = huber50(np.array(x))
+        except (ValueError, RuntimeWarning):
+            mu = np.median(x)
+            s = np.nan
+            #XXX replace s with mad when hubers est fails?
+            #from statsmodels import robust
+            #s = robust.mad(x)
+    hubers_series = pd.Series({'mu': mu, 'sd': np.sqrt(s)}, dtype = 'float64')
+    return hubers_series
 
 def z_score(x, df):
     """Calculate a z score for each x value, using estimates from a pandas data
@@ -242,9 +262,7 @@ def main():
     # Calculate values for if there were zero reads at a locus in all samples
     null_locus_counts = np.log2(factor * (0 + 1) / sample_depths)
     # Add a null locus that has 0 reads for all individuals (so just uses coverage)
-    null_locus_counts_est = pd.Series([
-        np.median(null_locus_counts['depth']), np.std(null_locus_counts['depth'])
-        ], index = ['mu', 'sd'])
+    null_locus_counts_est = hubers_est(null_locus_counts)
 
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
@@ -254,10 +272,9 @@ def main():
     # Calculate median and SD across all samples for each locus
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculate mu and sd estimates\n')
-    locus_estimates = pd.DataFrame(list(zip(
-        np.median(sum_str_log_wide, axis = 1), np.std(sum_str_log_wide, axis = 1)
-        )), columns = ['mu', 'sd'])
-    locus_estimates.index = sum_str_log_wide.index
+    # Use Huber's M-estimator to calculate median and SD across all samples
+    # for each locus
+    locus_estimates = sum_str_log_wide.apply(hubers_est, axis=1)
 
     # Where sd is NA, replace with the minimum non-zero sd from all loci
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
