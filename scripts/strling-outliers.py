@@ -12,6 +12,7 @@ with warnings.catch_warnings():
     import os
     import numpy as np
     import statsmodels.api as sm # for hubers
+    from statsmodels import robust # for MAD
     from scipy.stats import norm
     from statsmodels.sandbox.stats.multicomp import multipletests
     import pandas as pd
@@ -49,6 +50,9 @@ def parse_args():
     parser.add_argument(
         '--min_size', type=int, default=0,
         help='In the individual sample files, only report loci with at least this allele2_est size in that sample.')
+    parser.add_argument(
+        '--debug', action='store_true',
+        help='Add column to output for estimation method')
 
     return parser.parse_args()
 
@@ -110,20 +114,24 @@ def parse_controls(control_file):
 def hubers_est(x):
     """Emit Huber's M-estimator median and SD estimates.
     If Huber's fails, emit standard median and NA for sd"""
-    huber50 = sm.robust.scale.Huber(maxiter=50)
+    huber_iter = sm.robust.scale.Huber(maxiter=1000)
+    x = np.array(x)
+    x = x[~np.isnan(x)] # Remove nans
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
 
         try:
-            mu, s = huber50(np.array(x))
+            mu, s = huber_iter(x)
+            method = 'Huber'
         except (ValueError, RuntimeWarning):
+            # Fall back on median and MAD when hubers est fails
             mu = np.median(x)
-            s = np.nan
-            #XXX replace s with mad when hubers est fails?
-            #from statsmodels import robust
-            #s = robust.mad(x)
-    hubers_series = pd.Series({'mu': mu, 'sd': np.sqrt(s)}, dtype = 'float64')
+            s = robust.mad(x)
+            method = 'MAD'
+    if s == 0:
+        s = np.nan
+    hubers_series = pd.Series({'mu': mu, 'sd': s, 'method': method})
     return hubers_series
 
 def z_score(x, df):
@@ -262,7 +270,7 @@ def main():
     # Calculate values for if there were zero reads at a locus in all samples
     null_locus_counts = np.log2(factor * (0 + 1) / sample_depths)
     # Add a null locus that has 0 reads for all individuals (so just uses coverage)
-    null_locus_counts_est = hubers_est(null_locus_counts)
+    null_locus_counts_est = hubers_est(null_locus_counts)[0:2].astype('float64') # 3rd value is the method
 
     # Calculate a z scores using median and SD estimates from the current set
     # of samples
@@ -274,13 +282,15 @@ def main():
     sys.stderr.write('Calculate mu and sd estimates\n')
     # Use Huber's M-estimator to calculate median and SD across all samples
     # for each locus
-    locus_estimates = sum_str_log_wide.apply(hubers_est, axis=1)
+    locus_estimates_all = sum_str_log_wide.apply(hubers_est, axis=1)
+    locus_estimates = locus_estimates_all[['mu', 'sd']].astype('float64')
+    locus_methods = locus_estimates_all['method']
 
     # Where sd is NA, replace with the minimum non-zero sd from all loci
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Clean up zeros in sd estimates\n')
     min_sd = np.min(locus_estimates['sd'][locus_estimates['sd'] > 0])
-    locus_estimates['sd'].fillna(min_sd, inplace=True)
+    #locus_estimates['sd'].fillna(min_sd, inplace=True)
     # if sd is 0, replace with min_sd #XXX is this sensible?
     if null_locus_counts_est['sd'] == 0:
         null_locus_counts_est['sd'] = min_sd
@@ -373,6 +383,10 @@ def main():
                                 var_name = 'sample')
         genotype_data = pd.merge(genotype_data, adj_pvals_long)
 
+        # Merge in method used to estimate mu and sd for that locus
+        if args.debug:
+            genotype_data = pd.merge(genotype_data, locus_methods, on = 'locus')
+
         sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
         sys.stderr.write('Merge p values\n')
         pvals['locus'] = pvals.index
@@ -394,14 +408,17 @@ def main():
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Write output files\n')
     # Specify output data columns
-    write_data = genotype_data[['chrom', 'left', 'right', 'locus',
+    out_cols = ['chrom', 'left', 'right', 'locus',
                                     'sample', 'repeatunit',
                                     'allele1_est', 'allele2_est',
                                     'spanning_reads', 'spanning_pairs',
                                     'left_clips', 'right_clips', 'unplaced_pairs',
                                     'sum_str_counts', 'sum_str_log', 'depth',
                                     'outlier', 'p', 'p_adj'
-                                    ]]
+                                    ]
+    if args.debug:
+        out_cols.append('method')
+    write_data = genotype_data[out_cols]
 
     #sort by outlier score then estimated size (bpInsertion), both descending
     write_data = write_data.sort_values(['outlier', 'allele2_est'], ascending=[False, False])
