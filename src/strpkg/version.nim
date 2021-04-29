@@ -1,4 +1,4 @@
-const strlingVersion* = "0.4.2"
+const strlingVersion* = "0.5.0"
 
 # bin file format version
 const thisFmtVersion* = 0'i16
