@@ -10,6 +10,7 @@ with warnings.catch_warnings():
     import argparse
     import sys
     import os
+    import glob
     import numpy as np
     import statsmodels.api as sm # for hubers
     from statsmodels import robust # for MAD
@@ -28,10 +29,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Read STRling output and look for individuals that are outliers at STR loci')
     parser.add_argument(
         '--genotypes', type=str, nargs='+', required = True,
-        help='-genotype.txt files for all samples produced by STRling.')
+        help='-genotype.txt files for all samples produced by STRling. Optionally takes glob patterns as strings.')
     parser.add_argument(
         '--unplaced', type=str, nargs='+', required = True,
-        help='-unplaced.txt files for all samples produced by STRling. Contains the number of unassigned STR reads for each repeat unit.')
+        help='-unplaced.txt files for all samples produced by STRling. Contains the number of unassigned STR reads for each repeat unit. Optionally takes glob patterns as strings.')
     parser.add_argument(
         '--out', type=str, default = '',
         help='Prefix for all output files (suffix will be STRs.tsv) (default: %(default)s)')
@@ -147,6 +148,13 @@ def p_adj_bh(x):
     pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted = False)[1]
     return pval_corrected
 
+def glob_list(l):
+    files = []
+    for pattern in l:
+        for f in glob.glob(pattern):
+            files.append(f)
+    return(files)
+
 def main():
 
     start_time = time.time()
@@ -157,8 +165,8 @@ def main():
     base_filename = args.out
     emit_file = args.emit
     control_file = args.control
-    genotype_files = args.genotypes
-    unplaced_files = args.unplaced
+    genotype_files = glob_list(args.genotypes)
+    unplaced_files = glob_list(args.unplaced)
     slop = args.slop
     min_clips = args.min_clips
     min_size = args.min_size
