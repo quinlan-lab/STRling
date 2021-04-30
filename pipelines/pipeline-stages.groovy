@@ -1,6 +1,6 @@
 // Load pipeline configurations such as reference genome, locations of tools
 strling='strling'
-outliers='strling-outliers.py'
+outliers_py='strling-outliers.py'
 load "pipeline_config.groovy"
 
 if(args.any { it.endsWith('.cram') })
@@ -82,7 +82,7 @@ str_call_joint = {
 outliers = {
     from("*-genotype.txt", "*-unplaced.txt") produce("STRs.tsv") {
         exec """
-            $outliers
+            $outliers_py
                 --genotypes  *-genotype.txt
                 --unplaced *-unplaced.txt
                 --emit control-file.tsv
