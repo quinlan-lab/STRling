@@ -1,4 +1,4 @@
-Install
+Contribute
 ===================================
 
 .. toctree::
@@ -10,9 +10,9 @@ Creating a STRling release
 --------------------------
 
 - Rebase dev on master as needed
-- Increment version in two places:
+- Increment version in two places (using the appropriate semantic version https://semver.org/):
 
-`strling.nimble:version       = "0.4.1"`
+`strling.nimble:version       = "0.4.1"`  
 `src/strpkg/version.nim:const strlingVersion* = "0.4.1"`
 
 - PR/merge dev into master
