@@ -81,6 +81,8 @@ proc merge_main*() =
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
+    if fs == nil:
+      raise newException(IOError, &"[strling] unable to open {binFile} for reading. please check path")
     if args.verbose:
       stderr.write_line &"[strling] reading bin file: ", binfile
     var extracted = fs.unpack_file(drop_unplaced=true, verbose=args.verbose)
