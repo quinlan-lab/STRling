@@ -34,7 +34,7 @@ Output file: $sample.bin - a binary file describing STR-containing reads
 
 Output files:
 $sample-bounds - STR loci interrogated in that sample
-$sample-genotype.txt - Locus size estimates and other per-locus information (see :outputs:)
+$sample-genotype.txt - Locus size estimates and other per-locus information (see :ref:`outputs`)
 $sample-unplaced.txt - Counts of unplaced STR reads that could not be assigned to a specific locus
 
 Joint calling
@@ -80,5 +80,5 @@ Finds loci that are expanded in one individual relative to other individuals in 
   strling-outliers.py --genotypes *-genotype.txt --unplaced *-unplaced.txt
 
 Output files:
-STRs.tsv - a single file with all loci in all samples and their outlier p-values (see :outputs:)
+STRs.tsv - a single file with all loci in all samples and their outlier p-values (see :ref:`outputs`)
 $sample.STRs.tsv - the same data, filtered to a single individual
