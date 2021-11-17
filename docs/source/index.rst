@@ -3,10 +3,6 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. image:: strling-logo-webres.png
-  :width: 400
-  :alt: STRling logo
-
 Welcome to STRling's documentation!
 ===================================
 
