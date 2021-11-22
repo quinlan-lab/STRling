@@ -21,6 +21,7 @@ STRling (pronounced like “sterling”) is a method to detect large STR expansi
    test
    debug
    contribute
+   cite
 
 
 Quick start
