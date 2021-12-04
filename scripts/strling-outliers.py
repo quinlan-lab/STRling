@@ -31,7 +31,7 @@ def parse_args():
         '--genotypes', type=str, nargs='+', required = True,
         help='-genotype.txt files for all samples produced by STRling. Optionally takes glob patterns as strings.')
     parser.add_argument(
-        '--unplaced', type=str, nargs='+', required = True,
+        '--unplaced', type=str, nargs='+', required = False,
         help='-unplaced.txt files for all samples produced by STRling. Contains the number of unassigned STR reads for each repeat unit. Optionally takes glob patterns as strings.')
     parser.add_argument(
         '--out', type=str, default = '',
@@ -78,6 +78,15 @@ def parse_unplaced(filename):
     unplaced_counts = unplaced_counts[['sample', 'repeatunit', 'unplaced_count']]
     return(unplaced_counts)
 
+# Input columns from genotype.txt files to keep
+in_cols = ['chrom', 'left', 'right',
+            'sample', 'repeatunit',
+            'allele1_est', 'allele2_est',
+            'spanning_reads', 'spanning_pairs',
+            'left_clips', 'right_clips', 'unplaced_pairs',
+            'sum_str_counts', 'depth',
+            ]
+
 def parse_genotypes(filename, min_clips = 5):
     """Parse -genotype.txt file produced by STRling"""
     sample_id = get_sample(filename)
@@ -93,7 +102,7 @@ def parse_genotypes(filename, min_clips = 5):
     sys.stderr.write('Sample: {} Loci: {}\n'.format(sample_id, genotype_data.shape[0]))
 
     genotype_data['sample'] = sample_id
-    return(genotype_data)
+    return(genotype_data[in_cols])
 
 def parse_controls(control_file):
     """Parse control file with columns locus, median and standard deviation"""
@@ -166,7 +175,8 @@ def main():
     emit_file = args.emit
     control_file = args.control
     genotype_files = glob_list(args.genotypes)
-    unplaced_files = glob_list(args.unplaced)
+    if args.unplaced:
+        unplaced_files = glob_list(args.unplaced)
     slop = args.slop
     min_clips = args.min_clips
     min_size = args.min_size
@@ -174,13 +184,16 @@ def main():
 
     # Check files exist for all samples
     genotype_ids = set([get_sample(f) for f in genotype_files])
-    unplaced_ids = set([get_sample(f) for f in unplaced_files])
-    if genotype_ids == unplaced_ids:
-        all_samples = genotype_ids
+    if args.unplaced:
+        unplaced_ids = set([get_sample(f) for f in unplaced_files])
+        if genotype_ids == unplaced_ids:
+            all_samples = genotype_ids
+        else:
+            all_samples = genotype_ids | unplaced_ids
+            missing_samples = (all_samples - genotype_ids) | (all_samples - unplaced_ids)
+            sys.exit("ERROR: One or more files are missing for sample(s): " + ' '.join(missing_samples))
     else:
-        all_samples = genotype_ids | unplaced_ids
-        missing_samples = (all_samples - genotype_ids) | (all_samples - unplaced_ids)
-        sys.exit("ERROR: One or more files are missing for sample(s): " + ' '.join(missing_samples))
+        all_samples = genotype_ids
     
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Reading input files for {0} samples\n'.format(len(all_samples)))
@@ -188,27 +201,28 @@ def main():
     if len(all_samples) < 2 and control_file == '':
         sys.stderr.write('WARNING: Only 1 sample and no control file provided, so outlier scores and p-values will not be generated.')
 
-    # Parse unplaced data
-    unplaced_data = pd.concat( (parse_unplaced(f) for f in unplaced_files), ignore_index = True)
-
-    unplaced_wide = unplaced_data
-    # Fill zeros in unplaced counts
-    sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Fill zeros in unplaced counts\n')
-    unplaced_wide = unplaced_data.pivot(index='repeatunit', columns='sample',
-                    values='unplaced_count').fillna(0)
-    unplaced_wide['repeatunit'] = unplaced_wide.index
-
-    sample_cols = list(set(unplaced_data['sample']))
-    unplaced_long = pd.melt(unplaced_wide, id_vars = 'repeatunit',
-                            value_vars = sample_cols, value_name = 'unplaced_count',
-                            var_name = 'sample')
-
-    # Write unplaced read counts
-    unplaced_filename = base_filename + 'unplaced.tsv'
-    sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
-    sys.stderr.write('Writing unplaced counts for all samples to {}\n'.format(unplaced_filename))
-    unplaced_long.to_csv(unplaced_filename, sep= '\t', index = False, na_rep='NaN')
+    if args.unplaced:
+        # Parse unplaced data
+        unplaced_data = pd.concat( (parse_unplaced(f) for f in unplaced_files), ignore_index = True)
+    
+        unplaced_wide = unplaced_data
+        # Fill zeros in unplaced counts
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Fill zeros in unplaced counts\n')
+        unplaced_wide = unplaced_data.pivot(index='repeatunit', columns='sample',
+                        values='unplaced_count').fillna(0)
+        unplaced_wide['repeatunit'] = unplaced_wide.index
+    
+        sample_cols = list(set(unplaced_data['sample']))
+        unplaced_long = pd.melt(unplaced_wide, id_vars = 'repeatunit',
+                                value_vars = sample_cols, value_name = 'unplaced_count',
+                                var_name = 'sample')
+    
+        # Write unplaced read counts
+        unplaced_filename = base_filename + 'unplaced.tsv'
+        sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
+        sys.stderr.write('Writing unplaced counts for all samples to {}\n'.format(unplaced_filename))
+        unplaced_long.to_csv(unplaced_filename, sep= '\t', index = False, na_rep='NaN')
 
     # Parse genotype data
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
