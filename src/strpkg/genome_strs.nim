@@ -32,9 +32,10 @@ proc trim(w:var Window, dna:string): Window =
   # or something, but this actually works well AFAICT
 
   # trim left
-  for enc in dna.slide_by(w.repeat.len):
+  for enc in dna.slide_by(w.repeat.len, incr=1):
     if expected != enc: w.start += w.repeat.len
-    else: break
+    else: 
+      break
 
   doAssert w.start < w.stop, &"repeat {w.repeat} not found in expected region for {ow}, {dna}, {w}"
 
@@ -47,11 +48,11 @@ proc trim(w:var Window, dna:string): Window =
 
   var rep = w.repeat
   rep.reverse
-  for v in rep.slide_by(w.repeat.len):
+  for v in rep.slide_by(w.repeat.len - 1):
     expected = v
     break
 
-  for enc in dnar.slide_by(w.repeat.len):
+  for enc in dnar.slide_by(w.repeat.len - 1, incr=1):
     if expected != enc: w.stop -= w.repeat.len
     else: break
 
@@ -207,6 +208,10 @@ when isMainModule:
       echo w.trim(dna)
   ]#
 
-  index_main()
+  #index_main()
 
 
+  var w = Window(start: 71388200, stop:71388500, repeat:"ACCTTT")
+  var dna = "TGAAGGCAGCTAAATTCTCTTACCCTGAGGCTAAGGGCAAGTAGTAGGTAACAAAGGAGTGTAAAGGAATTTATCTAGATAAGTTTATTTACTTTTGCCGACCTTTGATCATCCGACCTTTGATCATCCGACCTTTGATCATCTGACCTTTGATCATCTGACCTTTGATCATCCGACCTTTGATCATCTGACCTTTGATCATCCGCGTGCAGGACTGCTCCCTACAGGCGGGGGCAACAACTACCCACAGATTGTGTTGGCTCCAGGCCTTTGTCATTAAATCTGTACTAAATAAATACA"
+
+  echo w.trim(dna)

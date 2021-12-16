@@ -7,8 +7,9 @@ import strformat
 import algorithm
 
 {.push checks:off optimization:speed.}
-iterator slide_by*(s:string, k: int): uint64 {.inline.} =
+iterator slide_by*(s:string, k: int, incr: int = -1): uint64 {.inline.} =
   ## given a string (DNA seq) yield the minimum kmer on the forward strand
+  let incr = if incr == -1: k else: incr
   if k <= s.len:
     var base: char
     var f = s[0..<k].encode
@@ -22,8 +23,8 @@ iterator slide_by*(s:string, k: int): uint64 {.inline.} =
 
     # after the first k, then we can use the forward add of k bases
     # to get to the next encode
-    for i in countup(k, s.high - k + 1, k):
-      for m in 0..<k:
+    for i in countup(k, s.high - k + 1, incr):
+      for m in 0..<incr:
         f.forward_add(s[i + m], k)
       kmin = f
       # then rotate the kmer
