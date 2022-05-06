@@ -64,7 +64,7 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
   var repeat_count: int
   var align_length: int
   var rep = aln.get_repeat(genome_str, counts, repeat_count, align_length, opts)
-  doAssert align_length > 0, aln.tostring
+  doAssert align_length >= 0, aln.tostring
   doAssert repeat_count < 256, aln.tostring
 
   result = tread(tid:aln.tid.int32,
