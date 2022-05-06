@@ -304,6 +304,7 @@ proc extract_main*() =
   var tid = -1
   for aln in ibam: #.query("14:92537254-92537477"):
     if aln.flag.secondary or aln.flag.supplementary: continue
+    if aln.cigar[0].len < 1: continue # exclude zero len reads, typically from trimming
     if aln.tid != tid and aln.tid >= 0:
       if ibam.hdr.targets[aln.tid].length > 2_000_000'u32:
         stderr.write_line "[strling] extracting chromosome:", $aln.chrom
