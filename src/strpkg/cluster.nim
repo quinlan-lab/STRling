@@ -21,7 +21,7 @@ type Soft* {.size:1, pure.} = enum
   none_left ## looking at main part of read which is soft-clipped on the left
 
 # Data structure storing information about each read that looks like an STR
-type tread* = ref object
+type tread* {.bycopy.} = object
   tid*: int32
   position*: uint32
   repeat*: array[6, char]
@@ -33,10 +33,8 @@ type tread* = ref object
   qname*: string
 
 proc hash*(t:tread): Hash =
-  return hash(cast[int](t))
-
-proc `$`*(t:tread): string =
-  result = system.`$`(t[])
+  result = t.tid.int !& t.position.int !& hash(t.repeat) !& hash(t.qname) !& t.flag.int !& t.split.int !& t.mapping_quality.int !& t.repeat_count.int !& t.align_length.int
+  result = !$result
 
 proc pack_type*[ByteStream](s: ByteStream, x: tread) =
   s.pack(x.tid)

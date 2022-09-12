@@ -15,12 +15,12 @@ import ./unpack
 export tread
 export Soft
 
-proc has_per_sample_reads(c:Cluster, supporting_reads:int, tread2sample:TableRef[tread, uint32]): bool =
+proc has_per_sample_reads(c:Cluster, supporting_reads:int): bool =
   ## check that, within the cluster there are at least `supporting reads` from
   ## 1 sample.
-  var sample_counts = initCountTable[uint32](8)
+  var sample_counts = initCountTable[string](8)
   for r in c.reads:
-    sample_counts.inc(tread2sample[r])
+    sample_counts.inc(r.qname)
 
   return sample_counts.largest().val >= supporting_reads
 
@@ -77,7 +77,6 @@ proc merge_main*() =
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
   # we use this to track (indirectly) which tread came from which sample.
-  var tread2sample = newTable[tread, uint32]()
 
   for sample_i, binfile in args.bin:
     var fs = newFileStream(binfile, fmRead)
@@ -105,15 +104,18 @@ proc merge_main*() =
       doAssert frag_dist[i] >= before, "overflow"
 
     # Unpack STR reads from all bin files and put them in a table by repeat unit and chromosome
-    var sample_i = sample_i.uint32
+    let sample_i = sample_i.uint32
+    let sample_i_str = $sample_i
+
     for r in extracted.reads.mitems:
-      # set qname empty to save a bit of memory.
-      r.qname = ""
-      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](8192)).add(r)
-      tread2sample[r] = sample_i
+      # HACK: set qname to the sample_i so we can track reads per sample
+      # this saves memory over having a separate tread->sample lookup.
+      r.qname = sample_i_str
+      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](128)).add(r)
+      # NOTE: this doubles the memory because we have one entry for each read!
     #stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
-    for k, trs in treads_by_tid_rep.mpairs:
-      trs.setLen(trs.len)
+  for k, trs in treads_by_tid_rep.mpairs:
+    trs.setLen(trs.len)
 
   var ntr = 0
   var n_unplaced = 0
@@ -163,7 +165,7 @@ proc merge_main*() =
     for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
       if c.reads[0].tid == -1:
         continue
-      if not c.has_per_sample_reads(opts.min_support, tread2sample): continue
+      if not c.has_per_sample_reads(opts.min_support): continue
 
       var b: Bounds
       var good_cluster: bool
