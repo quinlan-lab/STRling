@@ -135,9 +135,11 @@ proc parse_bedline*(l:string, targets: seq[Target], window: uint32): Bounds =
   doAssert(result.left_most <= result.right_most, &"{result}")
 
 # Parse an STR loci bed file
-proc parse_bed*(f:string, targets: seq[Target], window: uint32): seq[Bounds] =
+proc parse_bed*(f:string, targets: seq[Target], window: uint32, tid:int32= int32.low): seq[Bounds] =
   for line in lines f:
-    result.add(parse_bedline(string(line), targets, window))
+    let r = parse_bedline(string(line), targets, window)
+    if tid != int32.low and r.tid != tid: continue
+    result.add(r)
 
 # Parse single line of a STRling bounds file
 proc parse_boundsline*(l:string, targets: seq[Target]): Bounds =

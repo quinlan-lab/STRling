@@ -33,12 +33,21 @@ proc fill(targets:var seq[Target], fasta:string) =
     let name = fai[i]
     targets.add(Target(tid:i.int, name:name, length:fai.chrom_len(name).uint32))
 
+proc get_tid(targets:seq[Target], chromosome: string): int32 =
+  if targets.len == 0:
+      raise newException(ValueError, &"[strling merge] chromosome: {chromosome} specified, but no targets found in fasta. Specify a valid fasta file.")
+
+  for t in targets:
+    if t.name == chromosome:
+      return t.tid.int32
+  raise newException(ValueError, &"[strling merge] chromosome: {chromosome} not found in fasta, check name and 'chr' prefix")
 
 proc merge_main*() =
   var p = newParser("strling merge"):
     option("-f", "--fasta", help="path to fasta file (required if using CRAM input)")
     option("-w", "--window", help="Number of bp within which to search for reads supporting the other side of a bound. Estimated from the insert size distribution by default.", default = "-1")
     option("-m", "--min-support", help="minimum number of supporting reads required in at least one individual for a locus to be reported", default="5")
+    option("--chromosome", help="chromosome to restrict parsing. helps with memory/parallelization for large cohorts", default="-2")
     option("-c", "--min-clip", help="minimum number of supporting clipped reads for each side of a locus", default="0")
     option("-t", "--min-clip-total", help="minimum total number of supporting clipped reads for a locus", default="0")
     option("-q", "--min-mapq", help="minimum mapping quality (does not apply to STR reads)", default="40")
@@ -74,6 +83,9 @@ proc merge_main*() =
   var targets: seq[Target]
   if args.fasta != "" and allow_diff_chroms:
     targets.fill(args.fasta)
+
+  let requested_tid:int32 = if args.chromosome == "-2": int32.low else: get_tid(targets, args.chromosome)
+
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
   # we use this to track (indirectly) which tread came from which sample.
@@ -84,7 +96,7 @@ proc merge_main*() =
       raise newException(IOError, &"[strling] unable to open {binFile} for reading. please check path")
     if args.verbose:
       stderr.write_line &"[strling] reading bin file: ", binfile
-    var extracted = fs.unpack_file(drop_unplaced=true, verbose=args.verbose)
+    var extracted = fs.unpack_file(drop_unplaced=true, verbose=args.verbose, requested_tid=requested_tid)
     fs.close()
 
     # Check all bin files are from the same reference genome (or at least have the same chroms)
@@ -108,9 +120,8 @@ proc merge_main*() =
       # HACK: set qname to the sample_i so we can track reads per sample
       # this saves memory over having a separate tread->sample lookup.
       r.qname = sample_i_str
-      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](128)).add(r)
-      # NOTE: this doubles the memory because we have one entry for each read!
-    #stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
+      treads_by_tid_rep.mgetOrPut((r.tid, r.repeat), newSeqOfCap[tread](32)).add(r)
+    stderr.write_line &"[strling] read {extracted.reads.len} STR reads from file: {binfile}"
   for k, trs in treads_by_tid_rep.mpairs:
     trs.setLen(trs.len)
 
@@ -141,7 +152,7 @@ proc merge_main*() =
   var loci: seq[Bounds]
   if args.bed != "":
     # Parse bed file of regions and report spanning reads
-    loci = parse_bed(args.bed, targets, window.uint32)
+    loci = parse_bed(args.bed, targets, window.uint32, requested_tid)
 
   # Write bounds file with header
   var bounds_fh:File
