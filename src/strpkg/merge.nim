@@ -33,7 +33,9 @@ proc fill(targets:var seq[Target], fasta:string) =
     let name = fai[i]
     targets.add(Target(tid:i.int, name:name, length:fai.chrom_len(name).uint32))
 
-proc get_tid(targets:seq[Target], chromosome: string): int32 =
+proc get_tid(fasta:string, chromosome: string): int32 =
+  var targets: seq[Target]
+  targets.fill(fasta)
   if targets.len == 0:
       raise newException(ValueError, &"[strling merge] chromosome: {chromosome} specified, but no targets found in fasta. Specify a valid fasta file.")
 
@@ -84,7 +86,7 @@ proc merge_main*() =
   if args.fasta != "" and allow_diff_chroms:
     targets.fill(args.fasta)
 
-  let requested_tid:int32 = if args.chromosome == "-2": int32.low else: get_tid(targets, args.chromosome)
+  let requested_tid:int32 = if args.chromosome == "-2": int32.low else: get_tid(args.fasta, args.chromosome)
 
   var frag_dist: array[4096, uint32]
   var treads_by_tid_rep = newTable[tid_rep, seq[tread]](8192)
