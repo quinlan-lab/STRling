@@ -55,7 +55,7 @@ proc unpack_type[ByteStream](s: ByteStream, x: var tread) =
   x.qname = qname
 
 
-proc unpack_file*(fs:FileStream, expected_format_version:int16=0, drop_unplaced:bool=false, verbose:bool=false, targets:seq[Target] = @[]): tuple[targets: seq[Target], fragment_distribution: array[4096, uint32], reads: seq[tread]] =
+proc unpack_file*(fs:FileStream, expected_format_version:int16=0, drop_unplaced:bool=false, verbose:bool=false, targets:seq[Target] = @[], requested_tid: int32=int32.low): tuple[targets: seq[Target], fragment_distribution: array[4096, uint32], reads: seq[tread]] =
   doAssert fs != nil, "[strling] got nil fileStream in unpack_file. check given file-path"
 
   var str = fs.readStr(3)
@@ -110,7 +110,10 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0, drop_unplaced:
   fs.read(n_reads)
   if verbose:
     stderr.write_line &"[strling] reading {n_reads} STR reads from bin file"
-  result.reads = newSeqOfCap[tread](nreads)
+  if requested_tid == int32.low:
+    result.reads = newSeqOfCap[tread](nreads)
+  else:
+    result.reads = newSeqOfCap[tread](128)
 
   while not fs.atEnd:
     var t = tread()
@@ -119,10 +122,12 @@ proc unpack_file*(fs:FileStream, expected_format_version:int16=0, drop_unplaced:
     if tidmap.len > 0:
       t.tid = tidmap[t.tid].int32
 
+    if requested_tid != int32.low and t.tid != requested_tid: continue
+
     if drop_unplaced and t.tid < 0: continue
     result.reads.add(t)
 
-  if not drop_unplaced:
+  if not drop_unplaced and requested_tid == int32.low:
     doAssert result.reads.len == n_reads, &"[strling] expected {n_reads} got {result.reads.len}"
   else:
     doAssert result.reads.len <= n_reads, &"[strling] expected <{n_reads} got {result.reads.len}"
