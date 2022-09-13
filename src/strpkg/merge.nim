@@ -87,9 +87,6 @@ proc merge_main*() =
     var extracted = fs.unpack_file(drop_unplaced=true, verbose=args.verbose)
     fs.close()
 
-    # TODO: Check all bin files came from the same version of STRling
-    # TODO: Check all bin files used the same strling extract settings
-
     # Check all bin files are from the same reference genome (or at least have the same chroms)
     if targets.len == 0:
       targets = extracted.targets
