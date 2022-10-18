@@ -127,6 +127,10 @@ def hubers_est(x):
     huber_iter = sm.robust.scale.Huber(maxiter=1000)
     x = np.array(x)
     x = x[~np.isnan(x)] # Remove nans
+    
+    if len(x) == 0: # i.e. all nans
+        hubers_series = pd.Series({'mu': np.nan, 'sd': np.nan, 'method': 'NA'})
+        return hubers_series
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
@@ -152,9 +156,15 @@ def z_score(x, df):
 def p_adj_bh(x):
     '''Adjust p values using Benjamini/Hochberg method'''
     # Mask out nan values as they cause the multiptests algorithm to return all nan
+    #print(x)
     mask = np.isfinite(x)
+    #print(x[mask])
     pval_corrected = x.copy()
+    if len(pval_corrected[mask]) == 0:
+        return pval_corrected
     pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted = False)[1]
+    #print(pval_corrected)
+    #exit()
     return pval_corrected
 
 def glob_list(l):
@@ -298,12 +308,18 @@ def main():
     # of samples
     sum_str_log_wide = genotype_data.pivot(index='locus', columns='sample',
                     values='sum_str_log')
+    # Remove empty rows XXX bad idea!
+    #sum_str_log_wide.dropna(inplace=True)
+    #sum_str_log_wide.fillna(0, inplace=True)
 
     # Calculate median and SD across all samples for each locus
     sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
     sys.stderr.write('Calculate mu and sd estimates\n')
     # Use Huber's M-estimator to calculate median and SD across all samples
     # for each locus
+    #print(sum_str_log_wide.loc['chr1-103935646-103935647-C',:]s
+    #sum_str_log_wide.to_csv('sum_str_log_wide.tsv', sep= '\t')
+    
     locus_estimates_all = sum_str_log_wide.apply(hubers_est, axis=1)
     locus_estimates = locus_estimates_all[['mu', 'sd']].astype('float64')
     locus_methods = locus_estimates_all['method']
@@ -388,6 +404,8 @@ def main():
             warnings.simplefilter("ignore", RuntimeWarning)
 
             pvals = pd.DataFrame(norm.sf(z), index = z.index, columns = z.columns)
+        #print(z)
+        #print(pvals)
         sys.stderr.write(f'Elapsed time: {convert_time(time.time() - start_time)} ')
         sys.stderr.write('Adjust p values\n')
         if pvals.isnull().values.all(): # Don't bother adjusting p values if all are null
