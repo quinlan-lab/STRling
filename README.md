@@ -18,4 +18,4 @@ For more details able the algorithm check out our paper.
 
 If using STRling, please cite: 
 
-Dashnow H, Pedersen BS, Hiatt L, Brown J, Beecroft SJ, Ravenscroft G, et al. STRling: a k-mer counting approach that detects short tandem repeat expansions at known and novel loci [Internet]. bioRxiv. 2021. Available from: [doi:10.1101/2021.11.18.469113](https://doi.org/10.1101/2021.11.18.469113)
+Dashnow, H., Pedersen, B.S., Hiatt, L. et al. STRling: a k-mer counting approach that detects short tandem repeat expansions at known and novel loci. Genome Biol 23, 257 (2022). <https://doi.org/10.1186/s13059-022-02826-4>
