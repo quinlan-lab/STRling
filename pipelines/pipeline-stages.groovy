@@ -48,6 +48,29 @@ str_merge = {
     }
 }
 
+str_merge_chrom = {
+    doc "strling merge for a single chromosome"
+    from("*.bin") produce(branch.chr + "-bounds.txt") {
+        exec """
+            $strling merge
+                -f $REF
+                --chromosome $chr
+                -o $chr
+                $inputs.bin
+        ""","merge"
+    }
+}
+
+str_merge_collect = {
+    doc "Collect strling merge output for multiple chromosomes"
+    from("chr*-bounds.txt") produce("strling-bounds.txt") {
+        exec """
+            head -n 1 $input.txt > $output.txt;
+            tail -n +2 -q $inputs.txt >> $output.txt
+        ""","merge"
+    }
+}
+
 str_call_individual = {
     def sample = branch.name.prefix
     from (sample + "*str.bin", sample + "*" + input_type) produce(
