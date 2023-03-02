@@ -62,6 +62,8 @@ Requires minimum read evidence from at least one sample.
 
 Output file: joint-bounds.txt - positions of STR loci found by combining across all individuals, used for the call stage when joint calling
 
+Merging can be performed by chromosome to reduce memory requirements and parallelize using `--chromosome`. See the workflows for examples.
+
 **Call genotypes/estimate allele sizes for all loci in each sample**
 
 .. code-block:: bash
