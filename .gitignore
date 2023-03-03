@@ -8,3 +8,13 @@ src/strpkg/utils
 src/strpkg/simulate_reads
 src/strling
 *.swp
+data
+strling
+strling_debug
+sim
+test*
+working
+debug
+*/__pycache__
+*backup
+run_tests
