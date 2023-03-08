@@ -68,7 +68,7 @@ proc to_tread(aln:Record, genome_str:TableRef[string, Lapper[region]], counts: v
   doAssert align_length >= 0, aln.tostring
   when defined(debug):
     if align_length == 0:
-      stderr.write_line &"0-length alignment: {aln.tostring}"
+      stderr.write_line &"0-length alignment: {aln.qname} {aln.tostring}"
   doAssert repeat_count < 256, aln.tostring
 
   result = tread(tid:aln.tid.int32,
