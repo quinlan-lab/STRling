@@ -19,6 +19,7 @@ Install with conda
 We suggest conda installation if you want to perform outlier analysis, which requires a python script.
 
 .. code-block:: bash
+
   conda config --add channels bioconda
   conda install -y strling
 
