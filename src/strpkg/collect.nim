@@ -34,7 +34,7 @@ proc tostring*(s:Support, b:Bounds, chrom:string): string =
   result = &"{chrom}\t{b.left}\t{b.right}\t{s.Type}\t{s.SpanningFragmentLength}\t{s.SpanningFragmentPercentile}\t{s.SpanningReadRepeatCount}\t{s.SpanningReadCigarInsertionLen}\t{s.SpanningReadCigarDeletionLen}\t{s.repeat}\t{s.qname}"
 
 proc spanning_fragment*(L:Record, R:Record, bounds:Bounds, support:var Support, frag_sizes: array[4096, uint32]): bool =
-  doAssert L.start <= R.start
+  doAssert L.start <= R.start, $(L, R, bounds)
   var bound_width = bounds.right.int - bounds.left.int
   var slop = bounds.repeat.len - 1
   if bound_width < 5: # Add extra slop for very small bounds
