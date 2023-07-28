@@ -19,6 +19,7 @@ Dashnow, H., Pedersen, B.S., Hiatt, L. et al. STRling: a k-mer counting approach
    install
    run
    outputs
+   filter
    workflows
    test
    debug
