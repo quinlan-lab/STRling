@@ -62,7 +62,7 @@ Requires minimum read evidence from at least one sample.
 
 Output file: joint-bounds.txt - positions of STR loci found by combining across all individuals, used for the call stage when joint calling
 
-Merging can be performed by chromosome to reduce memory requirements and parallelize using `--chromosome`. See the workflows for examples.
+Peak memory usage for joint calling increases linearly by ~63 MB per 30-40X human WGS. This can be prohibitively high for large cohorts. To reduce memory requirements, analysis can be parallelized by chromosome using `--chromosome` then subsequently merged. See the workflows for examples. This reduces memory usage to ~5 MB/sample.
 
 **Call genotypes/estimate allele sizes for all loci in each sample**
 
