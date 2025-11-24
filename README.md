@@ -1,6 +1,6 @@
 ![STRling logo](docs/strling-logo-webres.png)
 
-[![Build Status](https://travis-ci.com/quinlan-lab/STRling.svg?branch=master)](https://travis-ci.com/quinlan-lab/STRling)
+[![CI](https://github.com/quinlan-lab/STRling/actions/workflows/ci.yml/badge.svg)](https://github.com/quinlan-lab/STRling/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/strling/badge/?version=latest)](https://strling.readthedocs.io/en/latest/?badge=latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
