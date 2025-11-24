@@ -1,6 +1,5 @@
 import algorithm
 import msgpack4nim
-import msgpack4collection
 import math
 import strformat
 import tables

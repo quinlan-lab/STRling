@@ -170,7 +170,6 @@ proc merge_main*() =
   # Cluster remaining reads
   var ci = 0
   for key, treads in treads_by_tid_rep.mpairs:
-    shallow(treads)
 
     for c in treads.cluster(max_dist=window.uint32, min_supporting_reads=opts.min_support):
       if c.reads[0].tid == -1:
