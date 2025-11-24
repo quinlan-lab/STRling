@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, dev ]
+  pull_request:
+    branches: [ master, dev ]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      NIM_VERSION: stable
+      HTSLIB_VERSION: 1.10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache nimble packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nimble
+          key: nimble-${{ runner.os }}-${{ hashFiles('strling.nimble') }}
+          restore-keys: |
+            nimble-${{ runner.os }}-
+
+      - name: Setup Nim
+        run: |
+          curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
+          sh init.sh -y
+          echo "$HOME/.nimble/bin" >> $GITHUB_PATH
+
+      - name: Install system build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libcurl4-openssl-dev libssl-dev zlib1g-dev libbz2-dev liblzma-dev wget unzip
+
+      - name: Build htslib
+        run: |
+          git clone --recursive https://github.com/samtools/htslib.git
+          cd htslib
+          git checkout $HTSLIB_VERSION
+          autoheader && autoconf && ./configure --enable-libcurl
+          make -j 2
+          echo "LD_LIBRARY_PATH=$PWD" >> $GITHUB_ENV
+
+      - name: Nimble install
+        run: nimble install -y
+
+      - name: Build strling help
+        run: ./strling -h
+
+      - name: Unit tests
+        run: nimble test -y
+
+  integration-e2e:
+    # Only run end-to-end tests on pushes to master to keep PRs fast
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    needs: build-test
+    env:
+      HTSLIB_VERSION: 1.10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Nim
+        run: |
+          curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
+          sh init.sh -y
+          echo "$HOME/.nimble/bin" >> $GITHUB_PATH
+      - name: Install system build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libcurl4-openssl-dev libssl-dev zlib1g-dev libbz2-dev liblzma-dev wget unzip
+      - name: Build htslib
+        run: |
+          git clone --recursive https://github.com/samtools/htslib.git
+          cd htslib
+          git checkout $HTSLIB_VERSION
+          autoheader && autoconf && ./configure --enable-libcurl
+          make -j 2
+          echo "LD_LIBRARY_PATH=$PWD" >> $GITHUB_ENV
+      - name: Nimble install
+        run: nimble install -y
+      - name: Download test data
+        run: |
+          mkdir -p run_tests
+          cd run_tests
+          wget -O data.zip https://ndownloader.figshare.com/articles/11367851?private_link=207b2a78ddcbdb28781b
+          unzip data.zip
+          rm data.zip
+          wget -O chr4.fa.gz https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr4.fa.gz
+          gzip -d chr4.fa.gz
+      - name: End-to-end single sample
+        run: |
+          cd run_tests
+          mkdir -p single
+          ../strling extract -f chr4.fa -g chr4.fa.str -v CANVAS.chr4-39348425_AAGGG_0_400.bam single/CANVAS.chr4-39348425_AAGGG_0_400.str.bin
+          ../strling call -v -o single/CANVAS.chr4-39348425_AAGGG_0_400 CANVAS.chr4-39348425_AAGGG_0_400.bam single/CANVAS.chr4-39348425_AAGGG_0_400.str.bin
+      - name: End-to-end joint samples
+        run: |
+          cd run_tests
+          mkdir -p joint
+          for i in *.bam; do ../strling extract -f chr4.fa -g chr4.fa.str -v $i joint/$i.str.bin; done
+          ../strling merge -f chr4.fa -v -o joint/strling joint/*.bin
+          for i in *.bam; do ../strling call -v -b joint/strling-bounds.txt -o joint/$i $i joint/$i.str.bin; done
+      - name: Inspect outputs
+        run: |
+          cd run_tests
+          head single/*.txt || true
+          head joint/strling-bounds.txt || true
+          head joint/*.txt || true
