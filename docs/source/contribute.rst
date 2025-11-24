@@ -6,6 +6,15 @@ Contribute
    :caption: Contents:
 
 
+Install Python dependencies
+--------------------------
+
+Using conda:
+.. code-block:: bash
+
+    conda env create -f environment.yml
+    conda activate strling
+
 Creating a STRling release
 --------------------------
 
