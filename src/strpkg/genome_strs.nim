@@ -69,7 +69,6 @@ iterator repeat_windows(fai:Fai, window_size:int, step:int, opts:Options): Windo
       stderr.write_line &"[strling] finding STR regions on reference chromosome: {chrom}"
     var last_w = Window(stop: -1)
     var chrom_seq = fai.get(chrom).toUpperAscii
-    shallow(chrom_seq)
     while start < L:
       var dna = chrom_seq[start..<min(L, start + window_size)]
       var rep = dna.get_repeat(counts, repeat_count, opts)

@@ -294,7 +294,6 @@ proc extract_main*() =
   var decodeds = newSeq[string](7)
   for i, s in decodeds.mpairs:
     decodeds[i] = newString(i)
-  shallow(decodeds)
 
   var cache = Cache(tbl:newTable[string, tread](8192), cache: newSeqOfCap[tread](65556))
   var opts = Options(median_fragment_length: frag_median, proportion_repeat: proportion_repeat,
