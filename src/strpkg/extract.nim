@@ -272,7 +272,7 @@ proc extract_main*() =
   var min_mapq = uint8(parseInt(args.min_mapq))
   var skip_reads = 100000
 
-  if not open(ibam, args.bam, fai=args.fasta, threads=0):
+  if not open(ibam, cstring(args.bam), fai=cstring(args.fasta), threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -286,7 +286,7 @@ proc extract_main*() =
     stderr.write_line "10th, 90th percentile of fragment length:", $frag_dist.median(0.1), " ", $frag_dist.median(0.9)
 
   ibam.close()
-  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
+  if not open(ibam, cstring(args.bam), fai=cstring(args.fasta), threads=0, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)

@@ -87,7 +87,7 @@ proc call_main*() =
     if not fileExists(args.bounds):
       quit "couldn't open bounds file"
 
-  if not open(ibam_dist, args.bam, fai=args.fasta, threads=0):
+  if not open(ibam_dist, cstring(args.bam), fai=cstring(args.fasta), threads=0):
     quit "couldn't open bam"
 
   var cram_opts = 8191 - SAM_RNAME.int - SAM_RGAUX.int - SAM_QUAL.int - SAM_SEQ.int
@@ -103,7 +103,7 @@ proc call_main*() =
   ibam_dist.close()
   ibam_dist = nil
   var ibam:Bam
-  if not open(ibam, args.bam, fai=args.fasta, threads=0, index=true):
+  if not open(ibam, cstring(args.bam), fai=cstring(args.fasta), threads=0, index=true):
     quit "couldn't open bam"
   cram_opts = 8191 - SAM_RGAUX.int - SAM_QUAL.int
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, cram_opts)
