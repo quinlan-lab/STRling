@@ -37,7 +37,7 @@ proc extract_region_main*() =
     quit 0
 
   var ibam:Bam
-  if not ibam.open(opts.bam, fai=opts.fasta, threads=3, index=true):
+  if not ibam.open(cstring(opts.bam), fai=cstring(opts.fasta), threads=3, index=true):
     quit "could not open bam"
 
   var records = newSeq[Record]()
@@ -69,7 +69,7 @@ proc extract_region_main*() =
 
   var obam:Bam
 
-  if not obam.open(opts.output_bam, mode="wb", threads=2):
+  if not obam.open(cstring(opts.output_bam), mode="wb", threads=2):
     quit "couldn't open output bam"
 
   obam.write_header(ibam.hdr)
