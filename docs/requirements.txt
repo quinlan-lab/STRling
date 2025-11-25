@@ -1,0 +1,7 @@
+# Python dependencies for building STRling documentation
+sphinx
+sphinx_rtd_theme
+numpy
+pandas
+scipy
+statsmodels

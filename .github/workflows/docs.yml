@@ -1,0 +1,58 @@
+# Minimal Sphinx docs build + deploy workflow
+# - Adjust `working-directory` or the `make -C` path to point where your Makefile lives.
+# - Ensure docs/requirements.txt exists or set pip install fallback packages.
+name: docs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install docs dependencies
+        run: |
+          if [ -f docs/requirements.txt ]; then
+            pip install -r docs/requirements.txt
+          else
+            pip install sphinx sphinx-rtd-theme
+          fi
+
+      - name: Build docs (make html)
+        # run from repo root and invoke Makefile in docs/; change -C if Makefile is at repo root
+        run: make -C docs html
+        # If your Makefile is at repo root and SOURCEDIR points to docs/source, use: run: make html
+
+      - name: Copy built html for pages
+        run: |
+          mkdir -p out
+          cp -r docs/build/html/* out/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v1
