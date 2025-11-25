@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NIM_VERSION: stable
-      HTSLIB_VERSION: 1.10
+      HTSLIB_VERSION: 1.22.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,9 +38,9 @@ jobs:
 
       - name: Build htslib
         run: |
-          git clone --recursive https://github.com/samtools/htslib.git
-          cd htslib
-          git checkout $HTSLIB_VERSION
+          wget https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2
+          tar xjf htslib-${HTSLIB_VERSION}.tar.bz2
+          cd htslib-${HTSLIB_VERSION}
           autoheader && autoconf && ./configure --enable-libcurl
           make -j 2
           echo "LD_LIBRARY_PATH=$PWD" >> $GITHUB_ENV
@@ -75,9 +75,9 @@ jobs:
           sudo apt-get install -y build-essential autoconf automake libcurl4-openssl-dev libssl-dev zlib1g-dev libbz2-dev liblzma-dev wget unzip
       - name: Build htslib
         run: |
-          git clone --recursive https://github.com/samtools/htslib.git
-          cd htslib
-          git checkout $HTSLIB_VERSION
+          wget https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2
+          tar xjf htslib-${HTSLIB_VERSION}.tar.bz2
+          cd htslib-${HTSLIB_VERSION}
           autoheader && autoconf && ./configure --enable-libcurl
           make -j 2
           echo "LD_LIBRARY_PATH=$PWD" >> $GITHUB_ENV
