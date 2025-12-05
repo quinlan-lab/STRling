@@ -42,8 +42,8 @@ jobs:
 
       - name: Copy built html for pages
         run: |
-          mkdir -p out
-          cp -r docs/build/html/* out/
+          mkdir -p _site
+          cp -r docs/build/html/* _site/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
