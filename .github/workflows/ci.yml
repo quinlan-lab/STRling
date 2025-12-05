@@ -54,8 +54,13 @@ jobs:
       - name: Build strling help
         run: ./strling -h
 
-      - name: Unit tests
+      - name: Run Nim unit tests
         run: nimble test -y
+
+      - name: Run Python doctests
+        run: |
+          conda env update -f environment.yml
+          conda run -n strling python -m doctest scripts/strling-outliers.py
 
   integration-e2e:
     # Only run end-to-end tests on pushes to master to keep PRs fast

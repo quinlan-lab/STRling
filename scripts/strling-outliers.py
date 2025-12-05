@@ -141,11 +141,30 @@ def z_score(x, df):
     return (x - df['mu'][:,np.newaxis])/df['sd'][:,np.newaxis]
 
 def p_adj_bh(x):
-    '''Adjust p values using Benjamini/Hochberg method'''
-    # Mask out nan values as they cause the multiptests algorithm to return all nan
+    '''Adjust p values using Benjamini/Hochberg method
+
+    Tests
+    -----
+    >>> import numpy as np
+    >>> p_adj_bh(np.array([np.nan, np.nan]))
+    array([nan, nan])
+    >>> p_adj_bh(np.array([np.inf, -np.inf]))
+    array([ inf, -inf])
+    >>> p_adj_bh(np.array([]))
+    array([], dtype=float64)
+    >>> out = p_adj_bh(np.array([0.01, np.nan, 0.05]))
+    >>> bool(np.isclose(out[0], 0.03, atol=0.01))
+    True
+    >>> bool(np.isnan(out[1]))
+    True
+    >>> bool(np.isclose(out[2], 0.05, atol=0.01))
+    True
+    '''
     mask = np.isfinite(x)
     pval_corrected = x.copy()
-    pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted = False)[1]
+    if not np.any(mask) or np.sum(mask) < 1: # If no finite values, or less than 1, just return the input unchanged
+        return pval_corrected
+    pval_corrected[mask] = multipletests(x[mask], method='fdr_bh', returnsorted=False)[1]
     return pval_corrected
 
 def glob_list(l):
