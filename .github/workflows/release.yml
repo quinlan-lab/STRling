@@ -1,0 +1,51 @@
+name: Release Static Binary
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v0.4.0
+
+jobs:
+  build-static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pull latest changes
+        run: git pull
+
+      - name: Set up Singularity
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y singularity-container
+
+      - name: Build debug static binary
+        run: |
+          singularity run --bind $(pwd):/load --bind /scratch --bind /uufs \
+            docker://brentp/musl-hts-nim:latest \
+            /usr/local/bin/nsb -n strling.nimble -s src/strling.nim -- -d:danger -d:release -d:debug
+          cp strling strling_debug
+
+      - name: Build release static binary
+        run: |
+          singularity run --bind $(pwd):/load --bind /scratch --bind /uufs \
+            docker://brentp/musl-hts-nim:latest \
+            /usr/local/bin/nsb -n strling.nimble -s src/strling.nim -- -d:danger -d:release
+
+      - name: Upload binaries as release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: strling_binaries
+          path: |
+            strling
+            strling_debug
+
+      - name: Create GitHub Release and attach binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            strling
+            strling_debug
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
