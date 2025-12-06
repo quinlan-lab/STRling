@@ -12,9 +12,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Pull latest changes
-        run: git pull
-
       - name: Set up Singularity
         run: |
           sudo apt-get update
