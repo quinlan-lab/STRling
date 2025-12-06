@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v0.4.0
+  workflow_dispatch:
 
 jobs:
   build-static:
@@ -19,14 +20,14 @@ jobs:
 
       - name: Build debug static binary
         run: |
-          singularity run --bind $(pwd):/load --bind /scratch --bind /uufs \
+          singularity run --bind $(pwd):/load \
             docker://brentp/musl-hts-nim:latest \
             /usr/local/bin/nsb -n strling.nimble -s src/strling.nim -- -d:danger -d:release -d:debug
           cp strling strling_debug
 
       - name: Build release static binary
         run: |
-          singularity run --bind $(pwd):/load --bind /scratch --bind /uufs \
+          singularity run --bind $(pwd):/load \
             docker://brentp/musl-hts-nim:latest \
             /usr/local/bin/nsb -n strling.nimble -s src/strling.nim -- -d:danger -d:release
 
